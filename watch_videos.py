@@ -19,6 +19,8 @@ SELECT_VIDEO = 3
 
 SEARCH_RANGE = 2.5
 
+SPECIAL_SEQS = None   # 用序列名的列表来表示一系列想看的序列
+
 FLAG = {0: 'NOR',
         1: 'INV',
         2: 'OCC',
@@ -194,7 +196,7 @@ def read_one_video(video_name, video_root, special=None):
     print('- Video: %s (%s)' % (video_name, video_root))
     seqs_dir = os.path.join(video_root, SEQUENCE_STR)
 
-    if special is None:
+    if special is None or len(special) == 0:
         seqs = os.listdir(seqs_dir)
         seqs.sort()
     else:
@@ -251,7 +253,7 @@ wait_time = 0
 refresh = True
 
 try:
-    for attrs, seqs in read_one_video(*SUB_VIDEOS[SELECT_VIDEO]):
+    for attrs, seqs in read_one_video(*SUB_VIDEOS[SELECT_VIDEO], special=SPECIAL_SEQS):
         print('------ ATTRS: {}'.format(attrs.attrs))
         attrs_window.set_attrs(attrs.attrs)
         # seq_content = []
