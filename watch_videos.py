@@ -15,11 +15,11 @@ WIN_WIDTH = 1024
 
 SCALE_START = 3.0
 
-SELECT_VIDEO = 3
-
 SEARCH_RANGE = 2.5
 
-SPECIAL_SEQS = None   # 用序列名的列表来表示一系列想看的序列
+SELECT_VIDEO = 0
+
+SPECIAL_SEQS = []   # 用序列名的列表来表示一系列想看的序列
 
 FLAG = {0: 'NOR',
         1: 'INV',
@@ -267,6 +267,7 @@ try:
         interval = 1
         iter_seqs = seqs.get_gens()
         img, poly, rect, frame, state = iter_seqs.send(None)
+        refresh = True
 
         while True:
             if refresh:
@@ -310,7 +311,7 @@ try:
                 break
             elif key == ord('q'):
                 iter_seqs.close()
-                raise Exception('exit!')
+                raise Exception('正常退出！')
             elif wait_time > 0:
                 pass
             elif key == ord('1'):
@@ -330,8 +331,9 @@ try:
         attrs_new = attrs_window.get_attrs()
         attrs.save_attrs(attrs_new)
         seqs.state_save()
-except Exception:
+except Exception as e:
     cv2.destroyAllWindows()
+    print(e)
     while True:
         ans = input('[EXIT] 是否要保存最后修改的序列的Attribute和Flag文件？(Y/N)')
         if ans == 'Y':
