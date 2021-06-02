@@ -17,7 +17,7 @@ SCALE_START = 3.0
 
 SEARCH_RANGE = 2.5
 
-SELECT_VIDEO = 0
+SELECT_VIDEO = 3
 
 SPECIAL_SEQS = []   # 用序列名的列表来表示一系列想看的序列
 
@@ -211,7 +211,7 @@ def read_one_video(video_name, video_root, special=None):
         yield Attr(os.path.join(video_root, 'attribute', '%s.txt' % seq)), Sequence(img_path, poly_path, rect_path, state_path)
 
 
-def draw_all(img, poly, rect, n, scale=1.0, state=0):
+def draw_all(img, poly, rect, n, scale=1.0, state=0, show_obj=True):
     poly_np = np.array(poly, np.float)
     rect_np = np.array(rect, np.float)
     rect_np[1, :] += rect_np[0, :]
@@ -233,11 +233,12 @@ def draw_all(img, poly, rect, n, scale=1.0, state=0):
     rect_np = rect_np.astype('int')
 
     poly_np = poly_np.reshape((-1, 1, 2))
-    cv2.rectangle(img, (rect_np[0, 0], rect_np[0, 1]), (rect_np[1, 0], rect_np[1, 1]), (0, 0, 255))
-    cv2.polylines(img, [poly_np], True, (0, 255, 0), 1, cv2.LINE_AA)
+    if show_obj:
+        cv2.rectangle(img, (rect_np[0, 0], rect_np[0, 1]), (rect_np[1, 0], rect_np[1, 1]), (0, 0, 255))
+        cv2.polylines(img, [poly_np], True, (0, 255, 0), 1, cv2.LINE_AA)
     cv2.rectangle(img, search_rect_pt1, search_rect_pt2, (255, 0, 255))
 
-    cv2.putText(img, '[%s]Frame: %d' % (FLAG[state], n), (rect_np[0, 0], rect_np[0, 1]-10), 0, 0.5, [255, 255, 255], 2)
+    cv2.putText(img, '[%s]Frame: %d' % (FLAG[state], n), (search_rect_pt1[0], search_rect_pt1[1]-10), 0, 0.5, [255, 255, 255], 2)
 
     return img
 
@@ -256,6 +257,8 @@ scale = SCALE_START
 wait_time = 0
 refresh = True
 
+show_object = True
+
 try:
     for attrs, seqs in read_one_video(*SUB_VIDEOS[SELECT_VIDEO], special=SPECIAL_SEQS):
         print('------ ATTRS: {}'.format(attrs.attrs))
@@ -271,7 +274,7 @@ try:
 
         while True:
             if refresh:
-                img_ = draw_all(img.copy(), poly, rect, frame+1, scale, state)
+                img_ = draw_all(img.copy(), poly, rect, frame+1, scale, state, show_object)
                 cv2.imshow('show_pic', img_)
 
             key = cv2.waitKey(wait_time)
@@ -280,6 +283,10 @@ try:
                 interval = -1
             elif key == ord('s'):
                 interval = 1
+
+            elif key == ord('h'):
+                interval = 0
+                show_object = not show_object
 
             elif key == ord('p'):
                 if wait_time == 0:
@@ -340,6 +347,7 @@ except Exception as e:
             attrs_new = attrs_window.get_attrs()
             attrs.save_attrs(attrs_new)
             seqs.state_save()
+            break
         elif ans == 'N':
             break
         else:
