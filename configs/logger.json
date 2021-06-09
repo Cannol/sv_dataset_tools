@@ -1,0 +1,21 @@
+
+{
+  "global": {
+    "levels": ["debug", "info", "warning", "error", "critical"],
+    "lowest_level": "debug",
+    "short_name": false,
+    "allow_abstract": false
+  },
+  "default": {
+    "log_level": "debug",
+    "format": "%(asctime)s:%(msecs)03d %(name)s[%(process)d][%(filename)s:%(lineno)d] %(levelname)s %(message)s",
+    "format_file": "%(asctime)s %(name)s[%(process)d][%(filename)s:%(lineno)d] %(levelname)s %(message)s",
+    "out_file": null
+  },
+  "root": {
+    "log_level": "info",
+    "out_file": null,
+    "name": "root"
+  }
+}
+
