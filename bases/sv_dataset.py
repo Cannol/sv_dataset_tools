@@ -1,6 +1,7 @@
 from common import YamlConfigClassBase, LoggerMeta
 from configs import DATASET_CONFIG_FILE
 import os
+import numpy as np
 from logging import Logger
 
 
@@ -9,6 +10,7 @@ class DatasetBase(YamlConfigClassBase, metaclass=LoggerMeta):
 
     DataRoot: str = ''
     VideoList: list = []
+    VideoName: list = []
 
     AnnosDirName: str = ''
     SeqDirName: str = ''
@@ -16,11 +18,13 @@ class DatasetBase(YamlConfigClassBase, metaclass=LoggerMeta):
     StatePostfix: str = ''
     RectPostfix: str = ''
     PolyPostfix: str = ''
+    AbsPostfix: str = ''
 
     AttrsCH: list = []
     AttrsEN: list = []
 
     D = {}
+    # V_DIRS = {}
 
     _DName = ['seq_name', 'img_dir', 'attr', 'state', 'rect', 'poly']
 
@@ -39,6 +43,7 @@ class DatasetBase(YamlConfigClassBase, metaclass=LoggerMeta):
         for video in cls.VideoList:
             seqs_dir = os.path.join(cls.DataRoot, video, cls.SeqDirName)
             annos = os.path.join(cls.DataRoot, video, cls.AnnosDirName)
+            # cls.V_DIRS[video] = {'seqs_dir': seqs_dir, 'annos': annos}
 
             seqs = os.listdir(seqs_dir)
 
@@ -50,6 +55,7 @@ class DatasetBase(YamlConfigClassBase, metaclass=LoggerMeta):
                 d['state'] = os.path.join(annos, '%s%s' % (seq, cls.StatePostfix))
                 d['rect'] = os.path.join(annos, '%s%s' % (seq, cls.RectPostfix))
                 d['poly'] = os.path.join(annos, '%s%s' % (seq, cls.PolyPostfix))
+                d['abs'] = os.path.join(annos, '%s%s' % (seq, cls.AbsPostfix))
 
                 cls.D[d['seq_name']] = d
 
@@ -70,10 +76,39 @@ class DatasetBase(YamlConfigClassBase, metaclass=LoggerMeta):
 
     @classmethod
     def GetAllX(cls, x_key):
-        x = []
+        x = {}
         for d in cls.D:
-            x.append(cls.D[d][x_key])
+            x[d] = (cls.D[d][x_key])
         return x
+
+    @classmethod
+    def toCenter(cls, rects):
+        rects_np = np.array(rects, dtype='float')
+        rects_np[:, 0, 0] += (rects_np[:, 1, 0]/2)
+        rects_np[:, 0, 1] += (rects_np[:, 1, 1]/2)
+        return rects_np
+
+
+    @classmethod
+    def ParseNameList(cls, name_list, result=None):
+        if isinstance(name_list, str):
+            name_list = [name_list]
+        if result is None:
+            result = []
+        for name in name_list:
+            v, seq = name.split('.')
+            if v == '*':
+                a = '%%s.%s' % seq
+                sub_list = [a % i for i in cls.VideoList]
+                cls.ParseNameList(sub_list, result)
+            elif seq == '*':
+                a = '%s.' % v
+                sub_list = [i for i in cls.D if i.startswith(a)]
+                sub_list.sort()
+                cls.ParseNameList(sub_list, result)
+            elif name not in result:
+                result.append(name)
+        return result
 
 
 DatasetBase.Load(DATASET_CONFIG_FILE)

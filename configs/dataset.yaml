@@ -6,6 +6,13 @@ VideoList:
   - '04'
   - '05'
   - '06'
+VideoName:
+  - 'San Francisco, USA'
+  - 'Delna, Libya'
+  - 'Adana, Turkey'
+  - 'Minneapolis, USA'
+  - 'Minneapolis, USA'
+  - 'Muharraq, Bahrain'
 
 AnnosDirName: annotations
 SeqDirName: sequences
@@ -13,6 +20,7 @@ AttrPostfix: .attr
 StatePostfix: .state
 RectPostfix: .rect
 PolyPostfix: .poly
+AbsPostfix: .abs
 
 AttrsCH:
   - '短时遮挡：出现过遮挡帧数不超过50帧的短时遮挡现象至少1次'

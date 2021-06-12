@@ -70,3 +70,4 @@ LOGGER_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'logger.json'))
 # yaml file
 DATASET_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'dataset.yaml'))
 VIDEOPLAYER_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'videoplayer.yaml'))
+ABSCREATOR_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'abscreator.yaml'))

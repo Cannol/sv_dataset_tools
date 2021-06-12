@@ -88,6 +88,51 @@ class Sequence:
         self.flag_curr = -1
         self.flag_index = -1
 
+        self.edit_mode = False
+        self.tmp_save = []
+        self.start_index = -1
+
+    def label_new(self, n):
+        poly, rect = self.poly_data[n], self.rect_data[n]
+        self.tmp_save = [poly.copy(), rect.copy()]
+        self.start_index = n
+        self.edit_mode = True
+
+    def label_end(self, n):
+
+
+
+        self.edit_mode = False
+        self.tmp_save.clear()
+        self.start_index = -1
+
+    def move_poly(self, dx, dy):
+        all_points = self.tmp_save[0]
+        for i in range(len(all_points)):
+            all_points[i] = (all_points[i][0]+dx, all_points[i][1]+dy)
+        tmp = np.array(self.tmp_save[0])
+        p = np.min(tmp, axis=0)
+        q = np.max(tmp, axis=0)
+        self.tmp_save[1] = [(p[0], p[1]), (q[0] - p[0], q[1] - p[1])]
+        return self.tmp_save
+
+    def detect_point(self, x, y, scale):
+        points = np.array(self.tmp_save[0], dtype='float')
+        l = np.square(points[:, 0]*scale - x) + np.square(points[:, 1]*scale - y)
+        n = np.argmin(l)
+        if l[n] < 25:
+            return n
+        else:
+            return -1
+
+    def update_poly(self, n, x, y, scale):
+        self.tmp_save[0][n] = (x / scale, y / scale)
+        tmp = np.array(self.tmp_save[0])
+        p = np.min(tmp, axis=0)
+        q = np.max(tmp, axis=0)
+        self.tmp_save[1] = [(p[0], p[1]), (q[0] - p[0], q[1] - p[1])]
+        return self.tmp_save
+
     def state_save(self):
         np.savetxt(self.state_path, self.flags, '%d', delimiter=",")
         print(' == update state file to: %s' % self.state_path)
@@ -95,7 +140,11 @@ class Sequence:
     def get_gens(self):
         n = 0
         while True:
-            img, poly, rect = self.imgs[n], self.poly_data[n], self.rect_data[n]
+            img = self.imgs[n]
+            if self.edit_mode:
+                poly, rect = self.tmp_save
+            else:
+                poly, rect = self.poly_data[n], self.rect_data[n]
             flag = self.flags[n] if self.flag_curr < 0 else (self.flag_curr+5)
             inter = yield cv2.imread(img), poly, rect, n, flag
             n += inter

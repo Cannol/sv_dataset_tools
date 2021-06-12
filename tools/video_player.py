@@ -5,6 +5,7 @@ from attrs_window import Window
 from configs import VIDEOPLAYER_CONFIG_FILE
 from bases.file_ops import Sequence, Attr
 
+CTRL_KEY = 9
 
 class VideoPlayer(DatasetBase):
 
@@ -60,27 +61,6 @@ class VideoPlayer(DatasetBase):
                 cls._window_attr.join(1)
 
     @classmethod
-    def ParseNameList(cls, name_list, result=None):
-        if isinstance(name_list, str):
-            name_list = [name_list]
-        if result is None:
-            result = []
-        for name in name_list:
-            v, seq = name.split('.')
-            if v == '*':
-                a = '%%s.%s' % seq
-                sub_list = [a % i for i in cls.VideoList]
-                cls.ParseNameList(sub_list, result)
-            elif seq == '*':
-                a = '%s.' % v
-                sub_list = [i for i in cls.D if i.startswith(a)]
-                sub_list.sort()
-                cls.ParseNameList(sub_list, result)
-            elif name not in result:
-                result.append(name)
-        return result
-
-    @classmethod
     def MakePlayList(cls, name_list):
         v_list = []
         _list = cls.ParseNameList(name_list)
@@ -129,6 +109,17 @@ class VideoPlayer(DatasetBase):
         self.data_attr = None
         self.center_mode = False
 
+        self.l_x = 0
+        self.l_y = 0
+
+        self.win_name = 'None'
+
+        self._mouse_down = False
+        self._select_point = -1
+        self._state = None
+        self.img = None
+        self._start_point = [-1, -1]
+
     def get_config(self):
         return self._show_obj, self._wait_time, self.center_mode
 
@@ -136,13 +127,13 @@ class VideoPlayer(DatasetBase):
         if v is None:
             return
         else:
-            self._show_obj, self._wait_time, self.centern_mode = v
+            self._show_obj, self._wait_time, self.center_mode = v
 
     def init_data(self):
         self.data_gen = Sequence(self.img_dir, self.poly, self.rect, self.state)
         self.data_attr = Attr(self.attr)
 
-    def _draw(self, img, poly, rect, n, scale=1.0, state=0, show_obj=True, center_obj=False):
+    def _draw(self, img, poly, rect, n, scale=1.0, state=0, show_obj=True, center_obj=False, edit_mode=False):
         poly_np = np.array(poly, np.float)
         rect_np = np.array(rect, np.float)
         rect_np[1, :] += rect_np[0, :]
@@ -161,18 +152,23 @@ class VideoPlayer(DatasetBase):
         rect_np = rect_np.astype('int')
 
         poly_np = poly_np.reshape((-1, 1, 2))
-        if show_obj:
+        if show_obj and not edit_mode:
             cv2.rectangle(img, (rect_np[0, 0], rect_np[0, 1]), (rect_np[1, 0], rect_np[1, 1]), (0, 0, 255))
             cv2.polylines(img, [poly_np], True, (0, 255, 0), 1, cv2.LINE_AA)
         cv2.rectangle(img, search_rect_pt1, search_rect_pt2, (255, 0, 255))
 
         cv2.putText(img, '[%s]Frame: %d' % (self._FLAG[state], n), (search_rect_pt1[0], search_rect_pt1[1] - 10), 0, 0.5,
                     [255, 255, 255], 2)
+        if edit_mode:
+            cv2.rectangle(img, (rect_np[0, 0], rect_np[0, 1]), (rect_np[1, 0], rect_np[1, 1]), (255, 0, 0))
+            cv2.polylines(img, [poly_np], True, (255, 255, 255), 1, cv2.LINE_AA)
+            for point in poly_np:
+                cv2.circle(img, (point[0, 0], point[0, 1]), 5, [0, 0, 255], -1)
 
         if center_obj:
-            l_x = max((rect_np[1, 0] + rect_np[0, 0] - self.WinWidth) // 2, 0)
-            l_y = max((rect_np[1, 1] + rect_np[0, 1] - self.WinHeight) // 2, 0)
-            return img[l_y:l_y+self.WinHeight, l_x:l_x+self.WinWidth]
+            self.l_x = max((rect_np[1, 0] + rect_np[0, 0] - self.WinWidth) // 2, 0)
+            self.l_y = max((rect_np[1, 1] + rect_np[0, 1] - self.WinHeight) // 2, 0)
+            return img[self.l_y:self.l_y+self.WinHeight, self.l_x:self.l_x+self.WinWidth]
 
         return img
 
@@ -181,14 +177,60 @@ class VideoPlayer(DatasetBase):
         cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(win_name, cls.WinWidth, cls.WinHeight)
 
+    def _mouse_event(self, event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            if flags == CTRL_KEY:
+                self._start_point[0] = x
+                self._start_point[1] = y
+                self._mouse_down = True
+            else:
+                self._select_point = self.data_gen.detect_point(x+self.l_x, y+self.l_y, self.scale)
+                if self._select_point >= 0:
+                    self._mouse_down = True
+        elif event == cv2.EVENT_LBUTTONUP and self._mouse_down:
+            self._mouse_down = False
+            self._select_point = -1
+            self._start_point[0] = -1
+        elif event == cv2.EVENT_MOUSEMOVE and self._mouse_down:
+            if flags == CTRL_KEY:
+                dx = x - self._start_point[0]
+                dy = y - self._start_point[1]
+                poly, rect = self.data_gen.move_poly(dx/self.scale, dy/self.scale)
+                img_ = self._draw(self.img.copy(), poly, rect, self.frame + 1, self.scale, self._state,
+                                  self._show_obj, self.center_mode, True)
+                cv2.imshow(self.win_name, img_)
+
+            elif self._start_point[0] >= 0:
+                self._start_point[0] = -1
+                self._mouse_down = False
+            else:
+                poly, rect = self.data_gen.update_poly(self._select_point, x+self.l_x, y+self.l_y, self.scale)
+                img_ = self._draw(self.img.copy(), poly, rect, self.frame + 1, self.scale, self._state,
+                                  self._show_obj, self.center_mode, True)
+                cv2.imshow(self.win_name, img_)
+
+
+    def _empty(self, event, x, y, flags, param):
+        pass
+
+    def _edit_mode(self, set_mode, n):
+        if set_mode:
+            self.data_gen.label_new(n)
+            cv2.setMouseCallback(self.win_name, self._mouse_event)
+        else:
+            self.data_gen.label_end(n)
+            cv2.setMouseCallback(self.win_name, self._empty)
+
     def play(self, win_name=None):
 
         self.InitializedPlayer()
 
         if win_name is None:
-            win_name = self.seq_name
-            cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
-            cv2.resizeWindow(win_name, self.WinWidth, self.WinHeight)
+            self.win_name = self.seq_name
+            cv2.namedWindow(self.win_name, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(self.win_name, self.WinWidth, self.WinHeight)
+        else:
+            self.win_name = win_name
 
         self._L.info('Video Sequence Name: %s' % self.seq_name)
         self.init_data()
@@ -201,18 +243,26 @@ class VideoPlayer(DatasetBase):
 
         interval = 1
         iter_seqs = self.data_gen.get_gens()
-        img, poly, rect, self.frame, state = iter_seqs.send(None)
+        self.img, poly, rect, self.frame, self._state = iter_seqs.send(None)
 
         return_value = 0
+        edit_mode = False
 
         try:
             while isGoing:
                 if refresh:
-                    img_ = self._draw(img.copy(), poly, rect, self.frame+1, self.scale, state, self._show_obj, self.center_mode)
-                    cv2.imshow(win_name, img_)
+                    img_ = self._draw(self.img.copy(), poly, rect, self.frame+1, self.scale, self._state,
+                                      self._show_obj, self.center_mode, edit_mode)
+                    cv2.imshow(self.win_name, img_)
                 key = cv2.waitKey(self._wait_time)
 
-                if key == ord('a'):  # 空格
+                if key == ord('e'):
+                    edit_mode = not edit_mode
+                    # 进入编辑模式
+                    self._edit_mode(edit_mode, self.frame)
+                    interval = 0
+
+                elif key == ord('a'):  # 空格
                     interval = -1
                 elif key == ord('s'):
                     interval = 1
@@ -278,7 +328,7 @@ class VideoPlayer(DatasetBase):
                 else:
                     refresh = False
                     continue
-                img, poly, rect, self.frame, state = iter_seqs.send(interval)
+                self.img, poly, rect, self.frame, self._state = iter_seqs.send(interval)
                 refresh = True
             attrs_new = self._window_attr.get_attrs()
             self.data_attr.save_attrs(attrs_new)
@@ -306,5 +356,6 @@ class VideoPlayer(DatasetBase):
 VideoPlayer.Load(VIDEOPLAYER_CONFIG_FILE)
 
 if __name__ == '__main__':
-    VideoPlayer.PlayList(VideoPlayer.MakePlayList(['*.*']))
+    # VideoPlayer.PlayList(VideoPlayer.MakePlayList(['*.*']))
+    VideoPlayer.PlayList(VideoPlayer.MakePlayList(['04.000017']))
 
