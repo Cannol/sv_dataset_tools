@@ -62,12 +62,25 @@ def read_text(text_file):
     return results
 
 
+def save_text(text_file, data):
+    lines = []
+    for row in data:
+        line = ['%.3f,%.3f' % (i, j) for i, j in row]
+        lines.append(','.join(line) + '\n')
+
+    with open(text_file, 'w') as f:
+        f.writelines(lines)
+
+
 class Sequence:
     def __init__(self, img_path, poly_path, rect_path, state_path):
         imgs = [os.path.join(img_path, i) for i in os.listdir(img_path)]
         imgs.sort()
         poly_data = read_text(poly_path)
         rect_data = read_text(rect_path)
+
+        self.poly_path = poly_path
+        self.rect_path = rect_path
 
         assert len(poly_data) == len(rect_data) == len(imgs), 'length do not match! %d vs %d vs %d' \
                                                               % (len(poly_data), len(rect_data), len(imgs))
@@ -91,6 +104,7 @@ class Sequence:
         self.edit_mode = False
         self.tmp_save = []
         self.start_index = -1
+        self._has_changed = False
 
     def label_new(self, n):
         poly, rect = self.poly_data[n], self.rect_data[n]
@@ -99,12 +113,48 @@ class Sequence:
         self.edit_mode = True
 
     def label_end(self, n):
+        if n == self.start_index:
+            self.rect_data[n] = self.tmp_save[1].copy()
+            self.poly_data[n] = self.tmp_save[0].copy()
+        else:
+            self.poly_data[n] = self.tmp_save[0].copy()
+            self.rect_data[n] = self.tmp_save[1].copy()
+            if n > self.start_index:
+                start = self.start_index
+                end = n
+                start_poly = self.poly_data[start]
+                end_poly = self.tmp_save[0]
+            else:
+                start = n
+                end = self.start_index
+                end_poly = self.poly_data[start]
+                start_poly = self.tmp_save[0]
+            diff_num = end - start
+            if diff_num > 1:
+                diff_poly = []
+                for p1, p2 in zip(start_poly, end_poly):
+                    diff_poly.append(((p2[0]-p1[0])/diff_num, (p2[1]-p1[1])/diff_num))
 
-
+                # 只需要修改中间位置的值
+                for i, index in enumerate(range(start+1, end)):
+                    poly = []
+                    for p, dp in zip(start_poly, diff_poly):
+                        poly.append((p[0]+(i+1)*dp[0], p[1]+(i+1)*dp[1]))
+                    tmp = np.array(poly)
+                    p = np.min(tmp, axis=0)
+                    q = np.max(tmp, axis=0)
+                    rect = [(p[0], p[1]), (q[0] - p[0], q[1] - p[1])]
+                    self.poly_data[index] = poly
+                    self.rect_data[index] = rect
 
         self.edit_mode = False
-        self.tmp_save.clear()
         self.start_index = -1
+        self._has_changed = True
+
+    def reset_poly(self):
+        poly, rect = self.poly_data[self.start_index], self.rect_data[self.start_index]
+        self.tmp_save = [poly.copy(), rect.copy()]
+        return self.tmp_save
 
     def move_poly(self, dx, dy):
         all_points = self.tmp_save[0]
@@ -132,6 +182,10 @@ class Sequence:
         q = np.max(tmp, axis=0)
         self.tmp_save[1] = [(p[0], p[1]), (q[0] - p[0], q[1] - p[1])]
         return self.tmp_save
+
+    def label_save(self):
+        save_text(self.poly_path, self.poly_data)
+        save_text(self.rect_path, self.rect_data)
 
     def state_save(self):
         np.savetxt(self.state_path, self.flags, '%d', delimiter=",")

@@ -42,8 +42,12 @@ class AnalysisData(DatasetBase):
             t = np.min(avg_speed)
             low.append(t)
             high.append(np.max(avg_speed) - t)
+            if i == 0:
+                print(low, high)
             if high[-1] > 40:
                 print(name)
+                low[-1] = 0
+                high[-1] = 0
 
         width = 1
         fig, ax = plt.subplots(figsize=(20, 8), dpi=200)

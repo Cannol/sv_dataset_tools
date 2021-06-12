@@ -133,7 +133,8 @@ class VideoPlayer(DatasetBase):
         self.data_gen = Sequence(self.img_dir, self.poly, self.rect, self.state)
         self.data_attr = Attr(self.attr)
 
-    def _draw(self, img, poly, rect, n, scale=1.0, state=0, show_obj=True, center_obj=False, edit_mode=False):
+    def _draw(self, img, poly, rect, n, scale=1.0, state=0, show_obj=True, center_obj=False,
+              edit_mode=False, update_off=True):
         poly_np = np.array(poly, np.float)
         rect_np = np.array(rect, np.float)
         rect_np[1, :] += rect_np[0, :]
@@ -166,8 +167,9 @@ class VideoPlayer(DatasetBase):
                 cv2.circle(img, (point[0, 0], point[0, 1]), 5, [0, 0, 255], -1)
 
         if center_obj:
-            self.l_x = max((rect_np[1, 0] + rect_np[0, 0] - self.WinWidth) // 2, 0)
-            self.l_y = max((rect_np[1, 1] + rect_np[0, 1] - self.WinHeight) // 2, 0)
+            if update_off:
+                self.l_x = max((rect_np[1, 0] + rect_np[0, 0] - self.WinWidth) // 2, 0)
+                self.l_y = max((rect_np[1, 1] + rect_np[0, 1] - self.WinHeight) // 2, 0)
             return img[self.l_y:self.l_y+self.WinHeight, self.l_x:self.l_x+self.WinWidth]
 
         return img
@@ -190,23 +192,32 @@ class VideoPlayer(DatasetBase):
         elif event == cv2.EVENT_LBUTTONUP and self._mouse_down:
             self._mouse_down = False
             self._select_point = -1
+            poly, rect = self.data_gen.tmp_save
+            img_ = self._draw(self.img.copy(), poly, rect, self.frame + 1, self.scale, self._state,
+                              self._show_obj, self.center_mode, True)
+            cv2.imshow(self.win_name, img_)
             self._start_point[0] = -1
         elif event == cv2.EVENT_MOUSEMOVE and self._mouse_down:
-            if flags == CTRL_KEY:
+            if self._start_point[0] >= 0:
                 dx = x - self._start_point[0]
                 dy = y - self._start_point[1]
+                self._start_point[0] = x
+                self._start_point[1] = y
                 poly, rect = self.data_gen.move_poly(dx/self.scale, dy/self.scale)
-                img_ = self._draw(self.img.copy(), poly, rect, self.frame + 1, self.scale, self._state,
-                                  self._show_obj, self.center_mode, True)
+                if flags == CTRL_KEY:
+                    img_ = self._draw(self.img.copy(), poly, rect, self.frame + 1, self.scale, self._state,
+                                      self._show_obj, self.center_mode, True, False)
+                else:
+                    self._start_point[0] = -1
+                    self._mouse_down = False
+                    img_ = self._draw(self.img.copy(), poly, rect, self.frame + 1, self.scale, self._state,
+                                      self._show_obj, self.center_mode, True, True)
                 cv2.imshow(self.win_name, img_)
 
-            elif self._start_point[0] >= 0:
-                self._start_point[0] = -1
-                self._mouse_down = False
             else:
                 poly, rect = self.data_gen.update_poly(self._select_point, x+self.l_x, y+self.l_y, self.scale)
                 img_ = self._draw(self.img.copy(), poly, rect, self.frame + 1, self.scale, self._state,
-                                  self._show_obj, self.center_mode, True)
+                                  self._show_obj, self.center_mode, True, False)
                 cv2.imshow(self.win_name, img_)
 
 
@@ -260,6 +271,10 @@ class VideoPlayer(DatasetBase):
                     edit_mode = not edit_mode
                     # 进入编辑模式
                     self._edit_mode(edit_mode, self.frame)
+                    interval = 0
+
+                elif edit_mode and key == ord('r'):
+                    self.data_gen.reset_poly()
                     interval = 0
 
                 elif key == ord('a'):  # 空格
@@ -333,6 +348,7 @@ class VideoPlayer(DatasetBase):
             attrs_new = self._window_attr.get_attrs()
             self.data_attr.save_attrs(attrs_new)
             self.data_gen.state_save()
+            self.data_gen.label_save()
 
         except Exception as e:
             cv2.destroyAllWindows()
@@ -344,6 +360,7 @@ class VideoPlayer(DatasetBase):
                     attrs_new = self._window_attr.get_attrs()
                     self.data_attr.save_attrs(attrs_new)
                     self.data_gen.state_save()
+                    self.data_gen.label_save()
                     break
                 elif ans == 'N':
                     break
