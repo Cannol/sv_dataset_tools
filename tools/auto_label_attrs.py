@@ -1,12 +1,138 @@
 from bases.sv_dataset import DatasetBase
-from bases.file_ops import read_state_file, read_text
+from bases.file_ops import read_state_file, read_text, Attr
 import numpy as np
 import matplotlib.pyplot as plt
 
 """
 用来自动生成序列的attribute：
- - CO, BCL, STO, LTO, SM, IPR
+ - STO, LTO, SM, CO, BCL
+  - '[STO] Short-Term Occlusion'     - '短时遮挡：出现过遮挡帧数不超过50帧的短时遮挡现象至少1次'                         
+  - '[LTO] Long-Term Occlusion'      - '长时遮挡：出现过遮挡帧数超过50帧的长时遮挡现象至少1次'                          
+  - '[SM] Slow Motion'               - '慢速运动：目标运动速度低于每帧X个像素'     # X有待确定                       
+  - '[CO] Continuous Occlusion'      - '连续遮挡：出现过2次或2次以上长短时遮挡'                                  
+  - '[BCL] Background Cluster'       - '背景相似：目标与背景融为一体，且无明显遮挡物'                                
 """
+
+
+class LabelDataAttr(DatasetBase):
+    def __init__(self):
+        super().__init__()
+        pass
+
+    @classmethod
+    def SetAll(cls, rect, state, attr):
+        STO, LTO, CO = cls.get_OCC_flag(state)
+        SM = cls.get_SM_flag_rect(rect)
+        BCL = cls.get_BCL_flag(state)
+
+        attr[0] = STO
+        attr[1] = LTO
+        attr[7] = CO
+        attr[5] = SM
+        attr[8] = BCL
+
+    @classmethod
+    def Auto_label(cls):
+        states = cls.GetAllX('state')
+        attrs = cls.GetAllX('attr')
+        rects = cls.GetAllX('rect')
+
+        names = list(states)
+        names.sort()
+        for i, name in enumerate(names):
+            state_filename = states[name]
+            attr_filename = attrs[name]
+            rect_file = rects[name]
+
+            s = read_state_file(state_filename)
+            attr = Attr(attr_filename)
+            # attr.read_attrs()
+            print(attr.attrs)
+
+            this_attr = attr.attrs.copy()
+
+            STO, LTO, CO = cls.get_OCC_flag(s)
+
+            SM = cls.get_SM_flag(rect_file)
+
+            BCL = cls.get_BCL_flag(s)
+
+            # - '[STO] Short-Term Occlusion'
+            # - '[LTO] Long-Term Occlusion'
+            # - '[DS] Dense Similarity'
+            # - '[IV] Illumination Variation'
+            # - '[BCH] Background Change'
+            # - '[SM] Slow Motion'
+            # - '[ND] Natural Disturbance'
+            # - '[CO] Continuous Occlusion'
+            # - '[BCL] Background Cluster'
+            # - '[IPR] In-Plane Rotation'
+            this_attr[0] = STO
+            this_attr[1] = LTO
+            this_attr[7] = CO
+            this_attr[5] = SM
+            this_attr[8] = BCL
+
+            attr.save_attrs(this_attr)
+
+    # STO, LTO, CO
+    @classmethod
+    def get_OCC_flag(cls, state):
+        occ_num = 0
+        occ_min_len = 999999
+        occ_max_len = 0
+
+        occ_state = state == 2
+        occ_flag = occ_state[:-1] != occ_state[1:]
+        occ_ind = np.argwhere(occ_flag)
+        if len(occ_ind) < 1:
+            return False, False, False
+
+        occ_start = 0
+        for ind in occ_ind:
+            if not occ_start:
+                occ_start = ind + 1
+                continue
+            else:
+                end = ind
+                occ_num += 1
+                occ_len = end - occ_start + 1
+                occ_min_len = min(occ_len, occ_min_len)
+                occ_max_len = max(occ_len, occ_max_len)
+                occ_start = 0
+
+        if occ_start:
+            occ_num += 1
+            occ_len = len(state) - occ_start
+            occ_min_len = min(occ_len, occ_min_len)
+            occ_max_len = max(occ_len, occ_max_len)
+
+        sto = True if 0 < occ_min_len < 50 else False
+        lto = True if occ_max_len >= 50 else False
+        co = True if occ_num >= 2 else False
+        return sto, lto, co
+
+    @classmethod
+    def get_SM_flag(cls, rect_file, threshold=1):
+        rect = np.array(read_text(rect_file))
+        return cls.get_SM_flag_rect(rect, threshold)
+
+    @classmethod
+    def get_SM_flag_rect(cls, rect, threshold=1):
+        center_np = cls.toCenter(rect)
+        sp = center_np[1:, 0, :] - center_np[:-1, 0, :]
+        speed = np.sqrt(np.square(sp[:, 0]) + np.square(sp[:, 1]))
+        avg_speed = np.zeros((len(speed) - 5 + 1))
+        for j in range(len(speed) - 5 + 1):
+            avg_speed[j] = np.average(speed[j:j + 5]) * 10
+        if np.sum(avg_speed < threshold):
+            return True
+        else:
+            return False
+
+    @classmethod
+    def get_BCL_flag(cls, state):
+        return True if np.sum(state == 1) >= 10 else False
 
 
 class AnalysisData(DatasetBase):
@@ -143,7 +269,11 @@ class AnalysisData(DatasetBase):
 
         plt.savefig('../output/datadis1.pdf')
         plt.show()
-
-
-p: AnalysisData = AnalysisData.AnalysisAttr('MV')
-# a.analysis_count()
+#
+#
+# # p: LabelDataAttr = AnalysisData.AnalysisAttr('MV')
+#
+# LabelDataAttr.Auto_label()
+# # pp: LabelDataAttr = LabelDataAttr()
+# # pp.Auto_label()
+# # a.analysis_count()

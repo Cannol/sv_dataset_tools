@@ -5,7 +5,8 @@ from attrs_window import Window
 from configs import VIDEOPLAYER_CONFIG_FILE
 from bases.file_ops import Sequence, Attr
 
-CTRL_KEY = 9
+from tools.auto_label_attrs import LabelDataAttr
+
 
 class VideoPlayer(DatasetBase):
 
@@ -28,6 +29,11 @@ class VideoPlayer(DatasetBase):
 
     WinHeight: int = 960
     WinWidth: int = 1024
+
+    CtrlKey: int = 8
+    EscKey: int = 27
+    EnterKey: int = 10
+    Backspace: int = 20
 
     Attrs = 'ch'
 
@@ -119,6 +125,12 @@ class VideoPlayer(DatasetBase):
         self._state = None
         self.img = None
         self._start_point = [-1, -1]
+        self.show_ref = False
+
+        self._move_th = [0, 0]
+
+        self._mini_img = None
+        self._new_poly = []
 
     def get_config(self):
         return self._show_obj, self._wait_time, self.center_mode
@@ -132,6 +144,59 @@ class VideoPlayer(DatasetBase):
     def init_data(self):
         self.data_gen = Sequence(self.img_dir, self.poly, self.rect, self.state)
         self.data_attr = Attr(self.attr)
+
+    def _mouse_event_new_object(self, event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            self._new_poly.append([x, y])
+            self._refresh_new_object()
+            self._mouse_down = True
+        elif event == cv2.EVENT_MOUSEMOVE:
+            self._new_poly[-1][0] = x
+            self._new_poly[-1][1] = y
+            self._refresh_new_object()
+        elif event == cv2.EVENT_LBUTTONUP and self._mouse_down:
+            self._mouse_down = False
+            self._refresh_new_object()
+
+    def _refresh_new_object(self):
+        img_ = self._mini_img.copy()
+        if len(self._new_poly) > 0:
+            if len(self._new_poly) > 2:
+                poly = np.array(self._new_poly[:-1], 'int')
+                poly = poly.reshape((-1, 1, 2))
+                cv2.polylines(img_, [poly], True, (0, 255, 0), 1, cv2.LINE_AA)
+            if len(self._new_poly) > 1:
+                cv2.line(img_, self._new_poly[-1], self._new_poly[-2], (128, 128, 128), 1, cv2.LINE_AA)
+            if len(self._new_poly) > 2:
+                cv2.line(img_, self._new_poly[-1], self._new_poly[0], (128, 128, 128), 1, cv2.LINE_AA)
+            for point in self._new_poly[:-1]:
+                cv2.circle(img_, point, 5, [128, 255, 128], -1)
+            cv2.circle(img_, self._new_poly[-1], 5, [255, 255, 255], -1)
+        cv2.imshow(self.win_name, img_)
+
+    def _make_new_mode(self):
+        img = cv2.resize(self.img, (round(self.img.shape[1] * self.scale), round(self.img.shape[0] * self.scale)), cv2.INTER_LINEAR)
+        self._mini_img = img[self.l_y:min(img.shape[0], self.l_y+self.WinHeight),
+                             self.l_x:min(img.shape[1], self.l_x+self.WinWidth)]
+        self._refresh_new_object()
+        self._new_poly = [[0, 0]]
+        cv2.setMouseCallback(self.win_name, self._mouse_event_new_object)
+
+        while True:
+            key = cv2.waitKey(0)
+            if key == self.EscKey:
+                cv2.setMouseCallback(self.win_name, self._empty)
+                self._L.info('You cancel the new object label operation, nothing changed.')
+                break
+            elif key == self.Backspace:
+                if len(self._new_poly) > 1:
+                    self._new_poly.pop(-1)
+                    self._refresh_new_object()
+            elif key == self.EnterKey:
+                cv2.setMouseCallback(self.win_name, self._empty)
+                self.data_gen.add_new_at_frame(self._new_poly[:-1], self.frame, self.scale, self.l_x, self.l_y)
+                self._L.info('New poly has been recorded in frame %d' % self.frame)
+                break
 
     def _draw(self, img, poly, rect, n, scale=1.0, state=0, show_obj=True, center_obj=False,
               edit_mode=False, update_off=True):
@@ -161,16 +226,31 @@ class VideoPlayer(DatasetBase):
         cv2.putText(img, '[%s]Frame: %d' % (self._FLAG[state], n), (search_rect_pt1[0], search_rect_pt1[1] - 10), 0, 0.5,
                     [255, 255, 255], 2)
         if edit_mode:
+            if self.show_ref:
+                ori_poly = np.array(self.data_gen.poly_data[self.frame], 'float')
+                ori_poly *= scale
+                ori_poly = ori_poly.astype('int')
+                ori_poly = ori_poly.reshape((-1, 1, 2))
+                cv2.polylines(img, [ori_poly], True, (202, 235, 216), 1, cv2.LINE_AA)
+                for point in ori_poly:
+                    cv2.circle(img, (point[0, 0], point[0, 1]), 5, [128, 138, 135], -1)
+                if 0 <= self._select_point < len(ori_poly):
+                    point = ori_poly[self._select_point]
+                    cv2.circle(img, (point[0, 0], point[0, 1]), 6, [128, 255, 135], 3)
             cv2.rectangle(img, (rect_np[0, 0], rect_np[0, 1]), (rect_np[1, 0], rect_np[1, 1]), (255, 0, 0))
             cv2.polylines(img, [poly_np], True, (255, 255, 255), 1, cv2.LINE_AA)
             for point in poly_np:
                 cv2.circle(img, (point[0, 0], point[0, 1]), 5, [0, 0, 255], -1)
+            if 0 <= self._select_point < len(poly_np):
+                point = poly_np[self._select_point]
+                cv2.circle(img, (point[0, 0], point[0, 1]), 6, [0, 255, 0], 3)
 
         if center_obj:
             if update_off:
                 self.l_x = max((rect_np[1, 0] + rect_np[0, 0] - self.WinWidth) // 2, 0)
                 self.l_y = max((rect_np[1, 1] + rect_np[0, 1] - self.WinHeight) // 2, 0)
-            return img[self.l_y:self.l_y+self.WinHeight, self.l_x:self.l_x+self.WinWidth]
+            return img[self.l_y:min(img.shape[0], self.l_y+self.WinHeight),
+                       self.l_x:min(img.shape[1], self.l_x+self.WinWidth)]
 
         return img
 
@@ -181,12 +261,12 @@ class VideoPlayer(DatasetBase):
 
     def _mouse_event(self, event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
-            if flags == CTRL_KEY:
+            if flags == self.CtrlKey:
                 self._start_point[0] = x
                 self._start_point[1] = y
                 self._mouse_down = True
             else:
-                self._select_point = self.data_gen.detect_point(x+self.l_x, y+self.l_y, self.scale)
+                self._select_point = self.data_gen.detect_point(x + self.l_x, y + self.l_y, self.scale)
                 if self._select_point >= 0:
                     self._mouse_down = True
         elif event == cv2.EVENT_LBUTTONUP and self._mouse_down:
@@ -197,29 +277,47 @@ class VideoPlayer(DatasetBase):
                               self._show_obj, self.center_mode, True)
             cv2.imshow(self.win_name, img_)
             self._start_point[0] = -1
-        elif event == cv2.EVENT_MOUSEMOVE and self._mouse_down:
-            if self._start_point[0] >= 0:
-                dx = x - self._start_point[0]
-                dy = y - self._start_point[1]
-                self._start_point[0] = x
-                self._start_point[1] = y
-                poly, rect = self.data_gen.move_poly(dx/self.scale, dy/self.scale)
-                if flags == CTRL_KEY:
+        elif event == cv2.EVENT_MOUSEMOVE:
+            if self._mouse_down:
+                if self._start_point[0] >= 0:
+                    dx = x - self._start_point[0]
+                    dy = y - self._start_point[1]
+                    self._start_point[0] = x
+                    self._start_point[1] = y
+                    poly, rect = self.data_gen.move_poly(dx/self.scale, dy/self.scale)
+                    if flags == self.CtrlKey:
+                        img_ = self._draw(self.img.copy(), poly, rect, self.frame + 1, self.scale, self._state,
+                                          self._show_obj, self.center_mode, True, False)
+                    else:
+                        self._start_point[0] = -1
+                        self._mouse_down = False
+                        img_ = self._draw(self.img.copy(), poly, rect, self.frame + 1, self.scale, self._state,
+                                          self._show_obj, self.center_mode, True, True)
+                    cv2.imshow(self.win_name, img_)
+
+                else:
+                    poly, rect = self.data_gen.update_poly(self._select_point, x+self.l_x, y+self.l_y, self.scale)
                     img_ = self._draw(self.img.copy(), poly, rect, self.frame + 1, self.scale, self._state,
                                       self._show_obj, self.center_mode, True, False)
-                else:
-                    self._start_point[0] = -1
-                    self._mouse_down = False
-                    img_ = self._draw(self.img.copy(), poly, rect, self.frame + 1, self.scale, self._state,
-                                      self._show_obj, self.center_mode, True, True)
-                cv2.imshow(self.win_name, img_)
-
+                    cv2.imshow(self.win_name, img_)
             else:
-                poly, rect = self.data_gen.update_poly(self._select_point, x+self.l_x, y+self.l_y, self.scale)
+                if -10 < x-self._move_th[0] < 10 and -10 < y-self._move_th[1] < 10:
+                    self._move_th[0] = x
+                    self._move_th[1] = y
+                    # print('???')
+                else:
+                    self._move_th[0] = x
+                    self._move_th[1] = y
+                    # print('!!!')
+                    return
+                sp = self.data_gen.detect_point(x+self.l_x, y+self.l_y, self.scale)
+                if self._select_point == sp:
+                    return
+                self._select_point = sp
+                poly, rect = self.data_gen.tmp_save
                 img_ = self._draw(self.img.copy(), poly, rect, self.frame + 1, self.scale, self._state,
                                   self._show_obj, self.center_mode, True, False)
                 cv2.imshow(self.win_name, img_)
-
 
     def _empty(self, event, x, y, flags, param):
         pass
@@ -232,9 +330,18 @@ class VideoPlayer(DatasetBase):
             self.data_gen.label_end(n)
             cv2.setMouseCallback(self.win_name, self._empty)
 
+    def update_auto_attrs(self):
+        LabelDataAttr.SetAll(rect=self.data_gen.rect_data,
+                             state=self.data_gen.flags,
+                             attr=self.data_attr.attrs)
+        self._window_attr.set_attrs(self.data_attr.attrs)
+        self._L.info('-- update attr: {}'.format(self.data_attr.attrs))
+
     def play(self, win_name=None):
 
         self.InitializedPlayer()
+
+        self._window_attr.bind_func = self.update_auto_attrs
 
         if win_name is None:
             self.win_name = self.seq_name
@@ -258,6 +365,7 @@ class VideoPlayer(DatasetBase):
 
         return_value = 0
         edit_mode = False
+        self.show_ref = False
 
         try:
             while isGoing:
@@ -266,17 +374,35 @@ class VideoPlayer(DatasetBase):
                                       self._show_obj, self.center_mode, edit_mode)
                     cv2.imshow(self.win_name, img_)
                 key = cv2.waitKey(self._wait_time)
-
+                # print(key)
                 if key == ord('e'):
                     edit_mode = not edit_mode
                     # 进入编辑模式
                     self._edit_mode(edit_mode, self.frame)
                     interval = 0
 
-                elif edit_mode and key == ord('r'):
+                elif key == ord('r') and edit_mode:
                     self.data_gen.reset_poly()
                     interval = 0
-
+                elif key == ord('[') and edit_mode:
+                    self.data_gen.rotate(-1)
+                    interval = 0
+                elif key == ord(']') and edit_mode:
+                    self.data_gen.rotate(1)
+                    interval = 0
+                elif key == ord('`') and edit_mode:
+                    self.show_ref = not self.show_ref
+                    interval = 0
+                elif key == self.EscKey and edit_mode:
+                    self._edit_mode(False, -1)
+                    edit_mode = False
+                    interval = 0
+                elif not edit_mode and key == ord('v'):
+                    img_ = self._draw(self.img.copy(), poly, rect, self.frame + 1, self.scale, self._state,
+                                      True, True, False)
+                    cv2.imshow(self.win_name, img_)
+                    self._make_new_mode()
+                    interval = 0
                 elif key == ord('a'):  # 空格
                     interval = -1
                 elif key == ord('s'):

@@ -4,3 +4,8 @@ WinHeight: 960
 WinWidth: 1024
 Attrs: 'ch'
 SameNext: true
+
+CtrlKey: 9
+EscKey: 27
+EnterKey: 13
+Backspace: 8

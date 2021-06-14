@@ -88,7 +88,6 @@ class DatasetBase(YamlConfigClassBase, metaclass=LoggerMeta):
         rects_np[:, 0, 1] += (rects_np[:, 1, 1]/2)
         return rects_np
 
-
     @classmethod
     def ParseNameList(cls, name_list, result=None):
         if isinstance(name_list, str):

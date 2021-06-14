@@ -89,7 +89,7 @@ class AbsCreator(DatasetBase):
 
 AbsCreator.Load(ABSCREATOR_CONFIG_FILE)
 
-
-AbsCreator.BuildAll()
+if __name__ == '__main__':
+    AbsCreator.BuildAll()
 
 

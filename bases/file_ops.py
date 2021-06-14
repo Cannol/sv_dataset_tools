@@ -106,6 +106,58 @@ class Sequence:
         self.start_index = -1
         self._has_changed = False
 
+    def rotate(self, angle):
+        poly, rect = self.tmp_save
+        poly_np = np.array(poly, 'float')
+        center_x, center_y = rect[0][0] + rect[1][0] / 2, rect[0][1] + rect[1][1] / 2
+        M = cv2.getRotationMatrix2D((center_x, center_y), angle, 1)
+        M_a = M[:, :2].T
+        M_b = M[0, 2]
+        M_c = M[1, 2]
+
+        poly_np = np.matmul(poly_np, M_a)
+        poly_np[:, 0] += M_b
+        poly_np[:, 1] += M_c
+
+        p = np.min(poly_np, axis=0)
+        q = np.max(poly_np, axis=0)
+        self.tmp_save[1] = [(p[0], p[1]), (q[0] - p[0], q[1] - p[1])]
+        self.tmp_save[0] = poly_np.tolist()
+
+    def delete_after(self, index):
+        self.rect_data = self.rect_data[:index+1]
+        self.poly_data = self.poly_data[:index+1]
+        self.flags = self.flags[:index+1]
+        imgs_to_delete = self.imgs[index+1:]
+        for img_path in imgs_to_delete:
+            os.system('rm %s' % img_path)
+        self.imgs = self.imgs[:index+1]
+
+    def delete_before(self, index):
+        self.rect_data = self.rect_data[index:]
+        self.poly_data = self.poly_data[index:]
+        self.flags = self.flags[index:]
+        imgs_to_delete = self.imgs[:index]
+        for img_path in imgs_to_delete:
+            os.system('rm %s' % img_path)
+        new_img_names = self.imgs[:-index-1]
+        for img_src, img_des in zip(self.imgs[index:], new_img_names):
+            os.system('mv %s %s' % (img_src, img_des))
+        self.imgs = new_img_names
+
+    def add_new_at_frame(self, poly, n, scale, off_x, off_y):
+        poly = np.array(poly, 'float')
+        poly[:, 0] += off_x
+        poly[:, 1] += off_y
+        poly /= scale
+        p = np.min(poly, axis=0)
+        q = np.max(poly, axis=0)
+        rect = [(p[0], p[1]), (q[0] - p[0], q[1] - p[1])]
+        self.rect_data[n] = rect
+        self.poly_data[n] = poly.tolist()
+
+        self._has_changed = True
+
     def label_new(self, n):
         poly, rect = self.poly_data[n], self.rect_data[n]
         self.tmp_save = [poly.copy(), rect.copy()]
@@ -113,6 +165,9 @@ class Sequence:
         self.edit_mode = True
 
     def label_end(self, n):
+        if n < 0:
+            self._cancel_label()
+            return
         if n == self.start_index:
             self.rect_data[n] = self.tmp_save[1].copy()
             self.poly_data[n] = self.tmp_save[0].copy()
@@ -127,7 +182,7 @@ class Sequence:
             else:
                 start = n
                 end = self.start_index
-                end_poly = self.poly_data[start]
+                end_poly = self.poly_data[end]
                 start_poly = self.tmp_save[0]
             diff_num = end - start
             if diff_num > 1:
@@ -155,6 +210,11 @@ class Sequence:
         poly, rect = self.poly_data[self.start_index], self.rect_data[self.start_index]
         self.tmp_save = [poly.copy(), rect.copy()]
         return self.tmp_save
+
+    def _cancel_label(self):
+        self.tmp_save.clear()
+        self.edit_mode = False
+        self.start_index = -1
 
     def move_poly(self, dx, dy):
         all_points = self.tmp_save[0]

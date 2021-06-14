@@ -2,12 +2,17 @@ import tkinter as tkk
 from tkinter.font import Font
 import threading
 
+
+def _empty(): pass
+
+
 class Window(threading.Thread):
 
     def __init__(self):
         super().__init__()
         self.values = []
         self.ATTRS = []
+        self.bind_func = _empty
 
     def construct(self, select_list):
         self.root = tkk.Tk()
@@ -23,6 +28,11 @@ class Window(threading.Thread):
             self.values.append(v)
             b.pack(anchor=tkk.W)
             self.boxes.append(b)
+        self.btn_update = tkk.Button(self.root, text='Update Auto-Attributes', command=self.func_update)
+        self.btn_update.pack(anchor=tkk.W)
+
+    def func_update(self):
+        self.bind_func()
 
     def set_attrs(self, values):
         for btn, value in zip(self.boxes, values):
