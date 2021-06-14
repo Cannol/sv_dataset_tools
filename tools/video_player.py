@@ -331,11 +331,12 @@ class VideoPlayer(DatasetBase):
             cv2.setMouseCallback(self.win_name, self._empty)
 
     def update_auto_attrs(self):
+        attrs = self._window_attr.get_attrs()
         LabelDataAttr.SetAll(rect=self.data_gen.rect_data,
                              state=self.data_gen.flags,
-                             attr=self.data_attr.attrs)
-        self._window_attr.set_attrs(self.data_attr.attrs)
-        self._L.info('-- update attr: {}'.format(self.data_attr.attrs))
+                             attr=attrs)
+        self._window_attr.set_attrs(attrs)
+        self._L.info('-- update attr: {}'.format(attrs))
 
     def play(self, win_name=None):
 
