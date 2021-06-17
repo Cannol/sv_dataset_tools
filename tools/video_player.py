@@ -35,6 +35,8 @@ class VideoPlayer(DatasetBase):
     EnterKey: int = 10
     Backspace: int = 20
 
+    CyclePlay: bool = True
+
     Attrs = 'ch'
 
     _ATTRS = []
@@ -96,7 +98,10 @@ class VideoPlayer(DatasetBase):
                 if cls.SameNext:
                     cc = vs.get_config()
                 i += r
-                i %= len(play_list)
+                if cls.CyclePlay:
+                    i %= len(play_list)
+                elif i >= len(play_list):
+                    break
         cls._L.info('===================== END ======================')
 
     def __init__(self):
@@ -248,9 +253,11 @@ class VideoPlayer(DatasetBase):
         if center_obj:
             if update_off:
                 self.l_x = max((rect_np[1, 0] + rect_np[0, 0] - self.WinWidth) // 2, 0)
+                self.l_x = min(self.l_x, img.shape[1] - self.WinWidth)
                 self.l_y = max((rect_np[1, 1] + rect_np[0, 1] - self.WinHeight) // 2, 0)
-            return img[self.l_y:min(img.shape[0], self.l_y+self.WinHeight),
-                       self.l_x:min(img.shape[1], self.l_x+self.WinWidth)]
+                self.l_y = min(self.l_y, img.shape[0] - self.WinHeight)
+            return img[self.l_y:self.l_y+self.WinHeight,
+                       self.l_x:self.l_x+self.WinWidth]
 
         return img
 
@@ -269,6 +276,12 @@ class VideoPlayer(DatasetBase):
                 self._select_point = self.data_gen.detect_point(x + self.l_x, y + self.l_y, self.scale)
                 if self._select_point >= 0:
                     self._mouse_down = True
+                else:
+                    poly, rect = self.data_gen.tmp_save
+                    img_ = self._draw(self.img.copy(), poly, rect, self.frame + 1, self.scale, self._state,
+                                      self._show_obj, self.center_mode, True, False)
+                    cv2.imshow(self.win_name, img_)
+
         elif event == cv2.EVENT_LBUTTONUP and self._mouse_down:
             self._mouse_down = False
             self._select_point = -1
@@ -304,11 +317,9 @@ class VideoPlayer(DatasetBase):
                 if -10 < x-self._move_th[0] < 10 and -10 < y-self._move_th[1] < 10:
                     self._move_th[0] = x
                     self._move_th[1] = y
-                    # print('???')
                 else:
                     self._move_th[0] = x
                     self._move_th[1] = y
-                    # print('!!!')
                     return
                 sp = self.data_gen.detect_point(x+self.l_x, y+self.l_y, self.scale)
                 if self._select_point == sp:

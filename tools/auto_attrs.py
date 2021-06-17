@@ -42,7 +42,7 @@ class AnalysisData(DatasetBase):
             t = np.min(avg_speed)
             low.append(t)
             high.append(np.max(avg_speed) - t)
-            if high[-1] > 40:
+            if high[-1] > 20:
                 print(name)
 
         width = 1
@@ -52,16 +52,6 @@ class AnalysisData(DatasetBase):
         ax.bar(x, high, bottom=low, width=width, align='edge')
 
         plt.show()
-
-
-
-
-
-
-
-
-
-
 
 
     @classmethod
