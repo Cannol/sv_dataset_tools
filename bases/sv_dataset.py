@@ -45,7 +45,7 @@ class DatasetBase(YamlConfigClassBase, metaclass=LoggerMeta):
             annos = os.path.join(cls.DataRoot, video, cls.AnnosDirName)
             # cls.V_DIRS[video] = {'seqs_dir': seqs_dir, 'annos': annos}
 
-            seqs = os.listdir(seqs_dir)
+            seqs = [s for s in os.listdir(seqs_dir) if not s.startswith('.')]
 
             for seq in seqs:
                 d = dict()
