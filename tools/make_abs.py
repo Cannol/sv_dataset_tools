@@ -34,6 +34,15 @@ def read_addon_file(json_file):
     return d['frame_range'], d['area_range'], d['class']
 
 
+def get_real_frame_range(img_path, info_range):
+    imgs = os.listdir(img_path)
+    imgs.sort()
+    min_num = int(imgs[0].split('.')[0])
+    max_num = int(imgs[-1].split('.')[0])
+    min_off = int(info_range[0]) + 1
+    return [min_num + min_off - 1, max_num + min_off - 1]
+
+
 class AbsCreator(DatasetBase):
     HardThreshold: float = 0.3
     AddOnInfo: str = ''
@@ -74,7 +83,7 @@ class AbsCreator(DatasetBase):
 
         abs.source_info.video_id = video_id
         abs.source_info.seq_id = seq_id
-        abs.source_info.frame_range = frame_range
+        abs.source_info.frame_range = get_real_frame_range(data['img_dir'], frame_range)
         abs.source_info.crop_range = crop_range
         abs.details.init_rect = rect[0]
         abs.details.init_poly = poly[0]

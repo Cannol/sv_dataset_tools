@@ -2,6 +2,7 @@ from bases.sv_dataset import DatasetBase
 from bases.file_ops import read_state_file, read_text
 import numpy as np
 import matplotlib.pyplot as plt
+from bases.abs_file import Abstract
 
 """
 用来自动生成序列的attribute：
@@ -75,6 +76,41 @@ class AnalysisData(DatasetBase):
         plt.show()
 
     @classmethod
+    def _analysis_INFO(cls):
+        # 统计数据集整体数据分布，按照不同的视频分开
+        abs = cls.GetAllX('abs')
+
+        video_num = len(cls.VideoList)
+
+        level = {'simple': [0 for _ in range(video_num)],
+                 'normal': [0 for _ in range(video_num)],
+                 'hard': [0 for _ in range(video_num)]
+                 }
+
+        classification = {'car': [0 for _ in range(video_num)],
+                          'car-large': [0 for _ in range(video_num)],
+                          'ship': [0 for _ in range(video_num)],
+                          'plane': [0 for _ in range(video_num)]
+                          }
+
+        sequence_numbers = [0 for _ in range(video_num)]
+
+        for name in abs:
+
+            abs_file = abs[name]
+            video_id, _ = name.split('.')
+            a: Abstract = Abstract.MakeNewFromJsonFile(abs_file)
+            level[a.details.level][int(video_id)-1] += 1
+            classification[a.details.class_name][int(video_id)-1] += 1
+
+            sequence_numbers[int(video_id)-1] += a.details.length
+
+        print(level)
+        print(classification)
+        print(sequence_numbers)
+        print(sum(sequence_numbers))
+
+    @classmethod
     def _analysis_STATE(cls):
         states = cls.GetAllX('state')
         state_inv = []
@@ -131,9 +167,9 @@ class AnalysisData(DatasetBase):
         ax_right.set_ylabel('Number of Frames in Each Video', fontsize=13)
         plt.ylim((0, 800))
 
-        plt.savefig('../output/datadis1.pdf')
+        plt.savefig('../output/dataset_overview.pdf')
         plt.show()
 
 
-p: AnalysisData = AnalysisData.AnalysisAttr('MV')
+p: AnalysisData = AnalysisData.AnalysisAttr('INFO')
 # a.analysis_count()

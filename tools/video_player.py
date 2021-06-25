@@ -215,10 +215,10 @@ class VideoPlayer(DatasetBase):
             img = cv2.resize(img, (round(img.shape[1] * scale), round(img.shape[0] * scale)), cv2.INTER_LINEAR)
         A = max(rect_np[1, 0] - rect_np[0, 0], rect_np[1, 1] - rect_np[0, 1]) * self.SearchRange
 
-        search_rect_pt1 = [round(rect_np[0, 0] + 0.5 * (rect_np[1, 0] - rect_np[0, 0] - A)),
-                           round(rect_np[0, 1] + 0.5 * (rect_np[1, 1] - rect_np[0, 1] - A))]
-        search_rect_pt2 = [round(rect_np[0, 0] + 0.5 * (rect_np[1, 0] - rect_np[0, 0] + A)),
-                           round(rect_np[0, 1] + 0.5 * (rect_np[1, 1] - rect_np[0, 1] + A))]
+        search_rect_pt1 = (round(rect_np[0, 0] + 0.5 * (rect_np[1, 0] - rect_np[0, 0] - A)),
+                           round(rect_np[0, 1] + 0.5 * (rect_np[1, 1] - rect_np[0, 1] - A)))
+        search_rect_pt2 = (round(rect_np[0, 0] + 0.5 * (rect_np[1, 0] - rect_np[0, 0] + A)),
+                           round(rect_np[0, 1] + 0.5 * (rect_np[1, 1] - rect_np[0, 1] + A)))
         poly_np = poly_np.astype('int')
         rect_np = rect_np.astype('int')
 

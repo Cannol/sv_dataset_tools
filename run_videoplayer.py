@@ -38,4 +38,5 @@ def run_video(names):
 
 if __name__ == '__main__':
     # test_keys()
-    run_video('*.*')
+    # run_video('*.*')
+    run_video('05.*')

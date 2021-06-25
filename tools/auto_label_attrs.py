@@ -267,13 +267,13 @@ class AnalysisData(DatasetBase):
         ax_right.set_ylabel('Number of Frames in Each Video', fontsize=13)
         plt.ylim((0, 800))
 
-        plt.savefig('../output/datadis1.pdf')
+        plt.savefig('../output/c.pdf')
         plt.show()
 #
 #
 # # p: LabelDataAttr = AnalysisData.AnalysisAttr('MV')
 #
-# LabelDataAttr.Auto_label()
+LabelDataAttr.Auto_label()
 # # pp: LabelDataAttr = LabelDataAttr()
 # # pp.Auto_label()
 # # a.analysis_count()

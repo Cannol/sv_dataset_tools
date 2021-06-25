@@ -8,7 +8,7 @@ logger = GLogger.get('base.FileOperators', 'FileOperators')
 
 def read_state_file(state_filename):
     state = np.loadtxt(state_filename, delimiter=",", dtype='int32')
-    logger.debug('Read state file from: %s' % state_filename)
+    logger.debug('[Read] state file from: %s' % state_filename)
     return state
 
 
@@ -33,11 +33,11 @@ class Attr(object):
             lines = f.readlines()[0].strip()
         attrs_value = lines.split(',')
         self.attrs = list(map(int, attrs_value))
-        logger.debug('Read attribute file from: %s' % self.file)
+        logger.debug('[Read] attribute file from: %s' % self.file)
 
     def save_attrs(self, new_attrs):
         if new_attrs == self.attrs:
-            pass
+            logger.info('-> Attr nothing change. [%s]' % self.file)
         else:
             a = []
             for item in new_attrs:
@@ -45,7 +45,7 @@ class Attr(object):
             a = ','.join(a)
             with open(self.file, 'w') as f:
                 f.write(a)
-            logger.info('-> Attr update: %s' % self.file)
+            logger.info('[Write] Attr update: %s' % self.file)
 
 
 def read_text(text_file):
@@ -59,6 +59,7 @@ def read_text(text_file):
         for x in range(0, len(numbers), 2):
             points.append((float(numbers[x]), float(numbers[x+1])))
         results.append(points)
+    logger.debug('[Read] text file: %s' % text_file)
     return results
 
 
@@ -70,6 +71,7 @@ def save_text(text_file, data):
 
     with open(text_file, 'w') as f:
         f.writelines(lines)
+    logger.debug('[Save] text file: %s' % text_file)
 
 
 class Sequence:
@@ -125,13 +127,19 @@ class Sequence:
         self.tmp_save[0] = poly_np.tolist()
 
     def delete_after(self, index):
-        self.rect_data = self.rect_data[:index+1]
-        self.poly_data = self.poly_data[:index+1]
-        self.flags = self.flags[:index+1]
         imgs_to_delete = self.imgs[index+1:]
+        if len(imgs_to_delete) == 0:
+            return
         for img_path in imgs_to_delete:
             os.system('rm %s' % img_path)
         self.imgs = self.imgs[:index+1]
+        self.rect_data = self.rect_data[:index + 1]
+        self.poly_data = self.poly_data[:index + 1]
+        self.flags = self.flags[:index + 1]
+
+    def delete_last(self, num):
+        after_index = len(self.imgs) - 1 - num
+        self.delete_after(after_index)
 
     def delete_before(self, index):
         self.rect_data = self.rect_data[index:]
@@ -141,8 +149,8 @@ class Sequence:
         for img_path in imgs_to_delete:
             os.system('rm %s' % img_path)
         new_img_names = self.imgs[:-index-1]
-        for img_src, img_des in zip(self.imgs[index:], new_img_names):
-            os.system('mv %s %s' % (img_src, img_des))
+        # for img_src, img_des in zip(self.imgs[index:], new_img_names):
+        #     os.system('mv %s %s' % (img_src, img_des))
         self.imgs = new_img_names
 
     def add_new_at_frame(self, poly, n, scale, off_x, off_y):
@@ -249,7 +257,7 @@ class Sequence:
 
     def state_save(self):
         np.savetxt(self.state_path, self.flags, '%d', delimiter=",")
-        print(' == update state file to: %s' % self.state_path)
+        logger.info(' [Save] update state file to: %s' % self.state_path)
 
     def get_gens(self):
         n = 0
