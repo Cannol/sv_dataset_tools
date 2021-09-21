@@ -94,6 +94,7 @@ class DatasetBase(YamlConfigClassBase, metaclass=LoggerMeta):
             name_list = [name_list]
         if result is None:
             result = []
+        name_list = [name for name in name_list if not name.endswith('Store')]
         for name in name_list:
             v, seq = name.split('.')
             if v == '*':

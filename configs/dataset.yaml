@@ -1,10 +1,10 @@
-DataRoot: /data1/data_here
+DataRoot: /Users/cannol/Downloads
 VideoList:
 #  - '01'
 #  - '02'
-#  - '03'
+  - '03'
 #  - '04'
-  - '05'
+#  - '05'
 #  - '06'
 VideoName:
   - 'San Francisco, USA'

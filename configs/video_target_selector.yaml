@@ -1,0 +1,13 @@
+VideoFilePath: '/Users/cannol/Downloads/纳米比亚温得和克-20170816/JL103B_MSS_20170816170641_100002030_101_001_L1B_MSS.avi'
+ImageSequence: '.tiff'
+SaveToDirectory: 'data_cache'
+
+CacheDirectory: 'data_cache/tmp'
+CacheImage: '.tiff'
+
+SelectArea: [100,100,400,400]
+#AreaFormat: 'xywh'
+WindowSize: [800, 600]
+
+VideoFormat: ['.mp4', '.MP4', '.avi', '.AVI']
+ErrorFrame: 'skip'   # skip, interpolation, stop

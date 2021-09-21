@@ -1,5 +1,6 @@
 import json
 import numpy
+import os
 from collections import OrderedDict
 if __name__ == '__main__':
     from common import GLogger
@@ -12,6 +13,26 @@ this script is designed for transfer json to class config and create the object
 _L = GLogger.get('JsonHelper', 'common.json_helper')
 
 DEFAULT_ASCII = True
+
+
+def SaveToFile(full_path, dict_obj, create_dir=False, description=None, **kwargs):
+    str_dict = json.dumps(dict_obj, **kwargs)
+    dir_name = os.path.dirname(full_path)
+    if create_dir and not os.path.exists(dir_name):
+        os.makedirs(dir_name)
+    with open(full_path, 'w') as f:
+        f.write(str_dict)
+    if description:
+        _L.info(description)
+
+
+def ReadFromFile(full_path, description=None, **kwargs):
+    if not os.path.exists(full_path): return None
+    with open(full_path) as f:
+        dict_obj = json.load(f, **kwargs)
+    if description:
+        _L.info(description)
+    return dict_obj
 
 
 class JsonEncoderCls(json.JSONEncoder):

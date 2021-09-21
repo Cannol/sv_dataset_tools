@@ -1,7 +1,7 @@
 from tools.video_player import VideoPlayer
 
 
-def test_keys():
+def keys():
     import numpy as np
     import cv2
 
@@ -37,5 +37,5 @@ def run_video(names):
 
 
 if __name__ == '__main__':
-    # test_keys()
+    # keys()
     run_video('*.*')
