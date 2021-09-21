@@ -210,22 +210,24 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         pass
 
     def _draw_welcome(self):
-        font = ImageFont.truetype(VIDEO_TARGET_SELECTOR_FONT_FILE, 10)  # 使用自定义的字体，第二个参数表示字符大小
+        font = ImageFont.truetype(VIDEO_TARGET_SELECTOR_FONT_FILE, 30)  # 使用自定义的字体，第二个参数表示字符大小
         im = Image.new("RGB", (self.WindowSize[0], self.WindowSize[1]))  # 生成空白图像
         draw = ImageDraw.Draw(im)  # 绘图句柄
         x, y = (0, 0)  # 初始左上角的坐标
-        draw.text((x, y), '这是一个测试文本1231231231245abcdefg', font=font)  # 绘图
+        draw.text((x, y), u'这是一个测试文本1231231231245abcdefg', font=font)  # 绘图
         # offsetx, offsety = font.getoffset('3')  # 获得文字的offset位置
         # width, height = font.getsize('3')  # 获得文件的大小
-        self.frame_image = np.zeros((self.WindowSize[0], self.WindowSize[1]), dtype='uint8')
+        # self.frame_image = np.zeros((self.WindowSize[0], self.WindowSize[1]), dtype='uint8')
+        self.frame_image = np.array(im)
 
     def run(self):
         # print('55556666')
-        # cv2.namedWindow('gogogo', flags=cv2.WINDOW_NORMAL)
+        cv2.namedWindow('main', flags=cv2.WINDOW_NORMAL)
         # print('!')
-        # cv2.setWindowTitle('gogogo', 'Welcome')
+        cv2.setWindowTitle('main', 'Welcome')
         self._draw_welcome()
-        cv2.imshow('gogogo', self.frame_image)
+        # self.frame_image = np.zeros((600, 600, 3), dtype='uint8')
+        cv2.imshow('main', self.frame_image)
         cv2.waitKey(0)
 
         # while True:
