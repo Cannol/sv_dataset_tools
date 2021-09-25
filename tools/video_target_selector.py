@@ -3,181 +3,16 @@ import cv2
 import numpy as np
 from configs import VIDEO_TARGET_SELECTOR_CONFIG_FILE, VIDEO_TARGET_SELECTOR_FONT_FILE
 from common.yaml_helper import YamlConfigClassBase
-from common.json_helper import JsonTransBase, SaveToFile, ReadFromFile
+from common.json_helper import SaveToFile, ReadFromFile
 from common.logger import LoggerMeta
 from logging import Logger
 import hashlib
-import copy
 import tqdm
 import struct
 import shutil
-import time
 from PIL import Image, ImageFont, ImageDraw
 
 VERSION = '1.0 beta'
-
-
-class Target(JsonTransBase, metaclass=LoggerMeta):
-    _L: Logger = None
-
-    _targets_dict = {}
-    _seed = ''
-    _default_path = ''
-    _max_length = 0
-
-    @classmethod
-    def GetAllTargets(cls, path):
-        target_files = [os.path.join(path, i) for i in os.listdir(path) if i.endswith('.meta')]
-        for file in target_files:
-            t = Target.MakeNewFromJsonFile(file)
-            name, _ = file.strip().split('.')
-            cls._targets_dict[name] = t
-
-    @classmethod
-    def SaveAllTargets(cls):
-        for i, key, t in enumerate(cls._targets_dict.items()):
-            t.save_file()
-            cls._L.info('[%d/%d] Save target %s -> file: %s' % (i ,len(cls._targets_dict), key, t.File))
-
-    def _rand_name_target(self):
-        hash_ = hashlib.md5()
-        hash_.update(('%s%.3f' % (self._seed, time.time())).encode('ascii'))
-        return hash_.hexdigest()
-
-    @classmethod
-    def Seed(cls, seed_str):
-        cls._seed = seed_str
-
-    @classmethod
-    def Length(cls, length: int):
-        cls._max_length = length
-
-    def __init__(self):
-        assert self._max_length > 0, 'Please initialize sequence length by "obj.Length(max_length)"!'
-        self.poly_points = np.zeros((1,), dtype='float')
-        self.create_timestamp = time.time()
-        self.rectangle = []
-        self.positions = -np.ones((self._max_length, 2), dtype='float')
-        self.name = self._rand_name_target()
-        self.start_index = -1
-        self.end_frame = -1
-        self.visible_flags = np.ones(self._max_length, dtype='bool')
-        self.key_frame = -np.ones((self._max_length, 3), dtype='int')   # (pre_index, next_index, 1/0/-1)
-
-    @classmethod
-    def New(cls, points, start_index):
-        obj = cls()
-        obj.set_start_poly(points, start_index)
-        cls._targets_dict[obj.name] = obj
-        cls._L.info('New target was created! [%s]' % obj.name)
-        return obj
-
-    @property
-    def File(self):
-        return os.path.join(self._default_path, '%s.meta' % self.name)
-
-    def save_file(self, path=None):
-        self.Json = path if path else self.File
-
-    def set_start_poly(self, points, start_index):
-        self.poly_points = copy.deepcopy(points)
-        self.start_index = start_index
-        self.end_frame = start_index
-        self.rectangle = [np.max(points, axis=0).tolist(), np.max(points, axis=0).tolist()]
-        self.positions[start_index, 0] = (self.rectangle[0][0] + self.rectangle[1][0])/2
-        self.positions[start_index, 1] = (self.rectangle[0][1] + self.rectangle[1][1])/2
-        self.key_frame[start_index, :] = [start_index, start_index, 1]
-        if start_index > 0:
-            self.visible_flags[:start_index-1] = False
-
-    def set_visible_at(self, frame_index, visible):
-        self.visible_flags[frame_index] = visible
-
-    def set_key_point(self, frame_index, point):
-        key = self.key_frame[frame_index, 2]
-        if key == 1:
-            self._modify_key_point_at(frame_index, point)
-        elif key == 0:
-            self._add_key_point_between(frame_index, point)
-        elif key == -1:
-            self._add_new_key_point(frame_index, point)
-
-    def _add_key_point_between(self, frame_index, point):
-        # 在两个关键点之间添加新的关键点
-        self.positions[frame_index, :] = point
-        pre_, next_ = self.key_frame[frame_index, :2]
-        self._calculate_frame_between(pre_, frame_index)
-        self._calculate_frame_between(frame_index, next_)
-        self.key_frame[frame_index, 2] = 1
-        self.key_frame[pre_, 1] = frame_index
-        self.key_frame[next_, 0] = frame_index
-
-    def _calculate_frame_between(self, start, end, update=True):
-        k = end - start
-        if k > 1:
-            mini = (self.positions[end, :] - self.positions[start, :]) / k
-            for i in range(start+1, end):
-                self.positions[i, :] = self.positions[i-1, :] + mini[:]
-                if update:
-                    self.key_frame[i, :] = [start, end, 0]
-
-    def _add_new_key_point(self, frame_index, point):
-        self.positions[frame_index, :] = point
-        if frame_index > self.end_frame:
-            self.key_frame[frame_index, :] = [self.end_frame, frame_index, 1]
-            self.key_frame[self.end_frame, 1] = frame_index
-            self._calculate_frame_between(self.end_frame, frame_index)
-            self.visible_flags[self.end_frame+1:frame_index+1] = True
-            self.end_frame = frame_index
-        elif frame_index < self.start_index:
-            self.key_frame[frame_index, :] = [frame_index, self.start_index, 1]
-            self.key_frame[self.start_index, 0] = frame_index
-            self._calculate_frame_between(frame_index, self.start_index)
-            self.visible_flags[frame_index:self.start_index] = True
-            self.start_index = frame_index
-        else:
-            assert False, 'Program logical error!'
-
-    def _modify_key_point_at(self, frame_index, point):
-        self.positions[frame_index, :] = point
-        pre_, next_ = self.key_frame[frame_index, :2]
-        self._calculate_frame_between(pre_, frame_index, False)
-        self._calculate_frame_between(frame_index, next_, False)
-
-    def _clear_frame_between(self, start, end):
-        for i in range(start+1, end):
-            self.positions[i, :] = [-1, -1]
-            self.visible_flags[i] = False
-            self.key_frame[i, :] = [-1, -1, -1]
-
-    def remove_key_point_at(self, frame_index):
-        pre_, next_, key = self.key_frame[frame_index, :]
-        if key == 0:
-            return
-        if pre_ == next_ == frame_index:
-            self.positions[frame_index, :] = -1
-            self.key_frame[frame_index, :] = -1
-            self.visible_flags[frame_index] = False
-            self.start_index = self.end_frame = -1
-
-        if frame_index == pre_:
-            self._clear_frame_between(self.start_index-1, next_)
-            self.start_index = next_
-            self.key_frame[self.start_index, 0] = self.start_index
-        elif frame_index == next_:
-            self._clear_frame_between(pre_, frame_index+1)
-            self.end_frame = pre_
-            self.key_frame[self.end_frame, 1] = self.end_frame
-        else:
-            self._calculate_frame_between(pre_, next_)
-
-    def get_points_range_from(self, left, right, top, bottom):
-        if self.start_index == -1:
-            return None
-
-        index_ = (left <= self.positions[:, 0] <= right) & (top <= self.positions[:, 1] <= bottom)
-        i_index = np.argwhere(index_)
-        return min(i_index), max(i_index)
 
 
 class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
@@ -186,8 +21,8 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
     VideoFilePath: str = ''
     ImageSequence: str = ''
     SelectArea: list = [0, 0, 0, 0]
-    # AreaFormat: str = ''     # xywh or xyxy
-    SaveToDirectory: str = ''
+
+    SaveToDirectory: str = ''  # label result save path
 
     WindowSize: list = [0, 0]  # width, height
     VideoFormat: list = []
@@ -206,32 +41,80 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         self.index = -1
         self.target_list = []
 
-    def _refresh(self):
-        pass
+        self.WinWidth = self.WindowSize[0]
+        self.WinHeight = self.WindowSize[1]
+
+        self._selections = [ord('1'), ord('2'), ord('b'), ord('q')]
+
+        self.font1 = ImageFont.truetype(VIDEO_TARGET_SELECTOR_FONT_FILE, 15)
+        _, self.font1_height = self.font1.getsize('测试高度')
+        self.font0 = ImageFont.truetype(VIDEO_TARGET_SELECTOR_FONT_FILE, 30)
+        _, self.font0_height = self.font0.getsize('测试高度')
+
+    # def _multi_targets_selection(self):
+    #
+
+    def _center_text(self, text, font=None, h=None, w=None):
+        font = font if font else self.font1
+        width, height = font.getsize(text)
+        w_center = (self.WinWidth - width) / 2 if w is None else w
+        h_center = (self.WinHeight - height) / 2 if h is None else h
+        return w_center, h_center
 
     def _draw_welcome(self):
-        font = ImageFont.truetype(VIDEO_TARGET_SELECTOR_FONT_FILE, 30)  # 使用自定义的字体，第二个参数表示字符大小
         im = Image.new("RGB", (self.WindowSize[0], self.WindowSize[1]))  # 生成空白图像
         draw = ImageDraw.Draw(im)  # 绘图句柄
-        x, y = (0, 0)  # 初始左上角的坐标
-        draw.text((x, y), u'这是一个测试文本1231231231245abcdefg', font=font)  # 绘图
-        # offsetx, offsety = font.getoffset('3')  # 获得文字的offset位置
-        # width, height = font.getsize('3')  # 获得文件的大小
-        # self.frame_image = np.zeros((self.WindowSize[0], self.WindowSize[1]), dtype='uint8')
+        start_y = self.WinHeight/2 - 200
+        start_x = self.WinWidth*0.2 + 50
+        welcome_text = u'欢迎使用遥感视觉标注工具 V%s' % VERSION
+        x, y = self._center_text(welcome_text, font=self.font0, h=start_y)
+        start_y += self.font0_height*2
+        draw.text((x, y), welcome_text, font=self.font0)
+        l_x, l_y, v_w, v_h = self._video_info['crop_area']
+        video_info = [(u'视频名称：', os.path.basename(self._video_info['source_path'])),
+                      (u'视频帧数：', '%d' % self._video_info['frame_count']),
+                      (u'视频尺寸：', u'宽度 %d, 高度 %d' % (v_w, v_h)),
+                      (u'来源坐标：', u'左上 (%d, %d), 右下 (%d, %d)' % (l_x, l_y, l_x+v_w, l_y+v_h)),
+                      (u'图像格式：', u'RGB彩色' if self._video_info['is_rgb'] else u'灰度图'),
+                      (u'原视频编码方式：', '%s' % self._video_info['fourcc'])
+                       ]
+        for i, info in enumerate(video_info):
+            w, _ = self.font1.getsize(info[0])
+            y_put = start_y+self.font1_height*1.5*i
+            draw.text((start_x-w, y_put), info[0], font=self.font1)
+            draw.text((start_x, y_put), info[1], font=self.font1)
+
         self.frame_image = np.array(im)
 
-    def run(self):
-        # print('55556666')
-        cv2.namedWindow('main', flags=cv2.WINDOW_NORMAL)
-        # print('!')
+    def _start_selection_loop(self):
         cv2.setWindowTitle('main', 'Welcome')
         self._draw_welcome()
-        # self.frame_image = np.zeros((600, 600, 3), dtype='uint8')
-        cv2.imshow('main', self.frame_image)
-        cv2.waitKey(0)
+        image = Image.fromarray(self.frame_image)
+        draw = ImageDraw.Draw(image)  # 绘图句柄
+        start_y = self.WinHeight / 2 + 200
+        text = u'按1进入多目标框选模式，按2进入单目标精调模式，按b进入按键调试模式，按q退出工具'
+        start_x, start_y = self._center_text(text, self.font1, h=start_y)
+        draw.text((start_x, start_y), text, font=self.font1, fill='yellow')
+        image_np = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        while True:
+            cv2.imshow('main', image_np)
+            key = cv2.waitKey(0)
+            if key in self._selections:
+                break
+            cv2.imshow('main', self.frame_image)
+            key = cv2.waitKey(500)
+            if key in self._selections:
+                break
+        if key == self._selections[-1]:
+            return 0
+        return key
 
-        # while True:
-        #     self._refresh()
+    def run(self):
+        cv2.namedWindow('main', flags=cv2.WINDOW_NORMAL)
+
+        selection = self._start_selection_loop()
+        while selection:
+            selection = self._start_selection_loop()
 
     @classmethod
     def _DoWithErrorFrame(cls, i, frames):
@@ -262,7 +145,8 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
                       'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
                       'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
                       'is_rgb': not bool(cap.get(cv2.CAP_PROP_CONVERT_RGB)),
-                      'frames': frames
+                      'frames': frames,
+                      'crop_area': [x1, y1, x2-x1, y2-y1]
                       }
 
         json_path = os.path.join(cls._cache_data, 'source_file.json')
@@ -317,7 +201,8 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
                       'width': width,
                       'height': height,
                       'is_rgb': channel == 3,
-                      'frames': frames
+                      'frames': frames,
+                      'crop_area': [x1, y1, x2 - x1, y2 - y1]
                       }
 
         json_path = os.path.join(cls._cache_data, 'source_file.json')

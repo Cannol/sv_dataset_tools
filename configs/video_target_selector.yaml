@@ -7,7 +7,7 @@ CacheImage: '.tiff'
 
 SelectArea: [100,100,400,400]
 #AreaFormat: 'xywh'
-WindowSize: [800, 600]
+WindowSize: [800, 600]  # 最小 500 x 500
 
 VideoFormat: ['.mp4', '.MP4', '.avi', '.AVI']
 ErrorFrame: 'skip'   # skip, interpolation, stop
