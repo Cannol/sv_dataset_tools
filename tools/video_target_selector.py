@@ -76,8 +76,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
                       (u'视频尺寸：', u'宽度 %d, 高度 %d' % (v_w, v_h)),
                       (u'来源坐标：', u'左上 (%d, %d), 右下 (%d, %d)' % (l_x, l_y, l_x+v_w, l_y+v_h)),
                       (u'图像格式：', u'RGB彩色' if self._video_info['is_rgb'] else u'灰度图'),
-                      (u'原视频编码方式：', '%s' % self._video_info['fourcc'])
-                       ]
+                      (u'原视频编码方式：', '%s' % self._video_info['fourcc'])]
         for i, info in enumerate(video_info):
             w, _ = self.font1.getsize(info[0])
             y_put = start_y+self.font1_height*1.5*i
@@ -98,7 +97,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         image_np = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
         while True:
             cv2.imshow('main', image_np)
-            key = cv2.waitKey(0)
+            key = cv2.waitKey(1000)
             if key in self._selections:
                 break
             cv2.imshow('main', self.frame_image)
@@ -110,7 +109,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         return key
 
     def run(self):
-        cv2.namedWindow('main', flags=cv2.WINDOW_NORMAL)
+        cv2.namedWindow('main', flags=cv2.WINDOW_AUTOSIZE)
 
         selection = self._start_selection_loop()
         while selection:
