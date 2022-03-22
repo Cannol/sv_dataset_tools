@@ -37,6 +37,8 @@ class VideoPlayer(DatasetBase):
 
     CyclePlay: bool = True
 
+    FrameInfoShowOutside: bool = True
+
     Attrs = 'ch'
 
     _ATTRS = []
@@ -205,8 +207,8 @@ class VideoPlayer(DatasetBase):
 
     def _draw(self, img, poly, rect, n, scale=1.0, state=0, show_obj=True, center_obj=False,
               edit_mode=False, update_off=True):
-        poly_np = np.array(poly, np.float)
-        rect_np = np.array(rect, np.float)
+        poly_np = np.array(poly, np.float32)
+        rect_np = np.array(rect, np.float32)
         rect_np[1, :] += rect_np[0, :]
 
         if scale != 1.0:
@@ -219,6 +221,7 @@ class VideoPlayer(DatasetBase):
                            round(rect_np[0, 1] + 0.5 * (rect_np[1, 1] - rect_np[0, 1] - A))]
         search_rect_pt2 = [round(rect_np[0, 0] + 0.5 * (rect_np[1, 0] - rect_np[0, 0] + A)),
                            round(rect_np[0, 1] + 0.5 * (rect_np[1, 1] - rect_np[0, 1] + A))]
+
         poly_np = poly_np.astype('int')
         rect_np = rect_np.astype('int')
 
@@ -228,8 +231,13 @@ class VideoPlayer(DatasetBase):
             cv2.polylines(img, [poly_np], True, (0, 255, 0), 1, cv2.LINE_AA)
         cv2.rectangle(img, search_rect_pt1, search_rect_pt2, (255, 0, 255))
 
-        cv2.putText(img, '[%s]Frame: %d' % (self._FLAG[state], n), (search_rect_pt1[0], search_rect_pt1[1] - 10), 0, 0.5,
-                    [255, 255, 255], 2)
+        if self.FrameInfoShowOutside:
+            cv2.putText(img, '[%s]Frame: %d' % (self._FLAG[state], n), (search_rect_pt1[0], search_rect_pt1[1] - 10), 0, 0.5,
+                        [255, 255, 255], 2)
+        else:
+            cv2.putText(img, '[%s]Frame: %d' % (self._FLAG[state], n), (rect_np[0, 0], rect_np[0, 1] - 10), 0,
+                        0.5,
+                        [255, 255, 255], 2)
         if edit_mode:
             if self.show_ref:
                 ori_poly = np.array(self.data_gen.poly_data[self.frame], 'float')

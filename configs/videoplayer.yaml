@@ -1,12 +1,14 @@
-ScaleStart: 10.0
-SearchRange: 2.5
+ScaleStart: 8
+SearchRange: 1.3
 WinHeight: 600
 WinWidth: 600
 Attrs: 'ch'
 SameNext: true
 CyclePlay: true
+FrameInfoShowOutside: false
 
 CtrlKey: 9
 EscKey: 27
 EnterKey: 13
 Backspace: 8
+

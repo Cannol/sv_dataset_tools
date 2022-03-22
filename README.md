@@ -50,6 +50,7 @@
     - WinWidth: 1024     # 窗体的宽度
     - Attrs: 'ch'        # 选择显示的属性的语言，ch中文，en英文
     - SameNext: true     # 是否把设置继承到下一个播放，如果是true，则会保留前一个视频的设置（是否居中显示，是否处于播放状态，尺度信息等）
+    - FrameInfoShowOutside # show frame information on the inside (false) or the outside (true) bounding box.
     - CtrlKey: 9         # 设置Ctrl按键的响应数字
     - EscKey: 27         # 设置ESC按键的响应数字
     - EnterKey: 13       # 设置回车按键的响应数字

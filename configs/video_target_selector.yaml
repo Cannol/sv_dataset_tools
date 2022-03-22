@@ -1,4 +1,4 @@
-VideoFilePath: '/data/new_satellite_video/JL103B_MSS_20181109144154_迪拜国际机场.avi'
+VideoFilePath: '/data1/ORSV/new_videos/aaa.avi'
 ImageSequence: '.tiff'
 SaveToDirectory: 'data_cache'
 
@@ -11,3 +11,5 @@ WindowSize: [800, 600]  # 最小 500 x 500
 
 VideoFormat: ['.mp4', '.MP4', '.avi', '.AVI']
 ErrorFrame: 'skip'   # skip, interpolation, stop
+
+

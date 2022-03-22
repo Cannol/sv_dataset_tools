@@ -1,11 +1,12 @@
-DataRoot: /Users/cannol/Downloads
+DataRoot: /data1/new_dataset/22/tar_dir
 VideoList:
 #  - '01'
 #  - '02'
-  - '03'
+#  - '03'
 #  - '04'
 #  - '05'
 #  - '06'
+  - '22'
 VideoName:
   - 'San Francisco, USA'
   - 'Delna, Libya'
