@@ -1,4 +1,4 @@
-DataRoot: /data1/new_dataset/22/tar_dir
+DataRoot: /data1/data_here
 VideoList:
 #  - '01'
 #  - '02'
@@ -6,7 +6,7 @@ VideoList:
 #  - '04'
 #  - '05'
 #  - '06'
-  - '22'
+  - 'a'
 VideoName:
   - 'San Francisco, USA'
   - 'Delna, Libya'
