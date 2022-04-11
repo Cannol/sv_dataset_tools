@@ -231,13 +231,15 @@ class VideoPlayer(DatasetBase):
             cv2.polylines(img, [poly_np], True, (0, 255, 0), 1, cv2.LINE_AA)
         cv2.rectangle(img, search_rect_pt1, search_rect_pt2, (255, 0, 255))
 
+        show_text = '[%s]Frame: %d' % (self._FLAG[state], n)
+        t_size = cv2.getTextSize(show_text, 0, 0.5, 2)[0]
         if self.FrameInfoShowOutside:
-            cv2.putText(img, '[%s]Frame: %d' % (self._FLAG[state], n), (search_rect_pt1[0], search_rect_pt1[1] - 10), 0, 0.5,
-                        [255, 255, 255], 2)
+            text_x = search_rect_pt1[0]
+            text_y = search_rect_pt1[1] - 10
         else:
-            cv2.putText(img, '[%s]Frame: %d' % (self._FLAG[state], n), (rect_np[0, 0], rect_np[0, 1] - 10), 0,
-                        0.5,
-                        [255, 255, 255], 2)
+            text_x = rect_np[0, 0]
+            text_y = rect_np[0, 1] - 10
+
         if edit_mode:
             if self.show_ref:
                 ori_poly = np.array(self.data_gen.poly_data[self.frame], 'float')
@@ -264,9 +266,19 @@ class VideoPlayer(DatasetBase):
                 self.l_x = min(self.l_x, img.shape[1] - self.WinWidth)
                 self.l_y = max((rect_np[1, 1] + rect_np[0, 1] - self.WinHeight) // 2, 0)
                 self.l_y = min(self.l_y, img.shape[0] - self.WinHeight)
+
+            text_x = min(max(self.l_x, text_x), self.l_x + self.WinWidth - t_size[0])
+            text_y = min(max(self.l_y+t_size[1], text_y), self.l_y + self.WinHeight - t_size[1])
+
+            cv2.putText(img, show_text, (text_x, text_y), 0, 0.5, [255, 255, 255], 2)
+
             return img[self.l_y:self.l_y+self.WinHeight,
                        self.l_x:self.l_x+self.WinWidth]
 
+        text_x = min(max(0, text_x), img.shape[1] - t_size[0])
+        text_y = min(max(t_size[1], text_y), img.shape[0] - t_size[1])
+
+        cv2.putText(img, show_text, (text_x, text_y), 0, 0.5, [255, 255, 255], 2)
         return img
 
     @classmethod

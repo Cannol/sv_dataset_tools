@@ -1,4 +1,4 @@
-DataRoot: /data1/IPIU_dataset_v2/first_label
+DataRoot: /data1/03/tar_dir_002car
 
 #DataRoot: /data1/new_dataset
 VideoList:
@@ -30,7 +30,8 @@ VideoList:
 #  - '19'
 #  - '20'
 #  - '21'
-  - '98'
+#  - '03'
+  - '20'
 VideoName:
   - 'San Francisco, USA'
   - 'Delna, Libya'
