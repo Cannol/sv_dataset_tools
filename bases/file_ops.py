@@ -74,8 +74,27 @@ def save_text(text_file, data):
 
 class Sequence:
     def __init__(self, img_path, poly_path, rect_path, state_path):
-        imgs = [os.path.join(img_path, i) for i in os.listdir(img_path)]
-        imgs.sort()
+        image_files = os.listdir(img_path)
+
+        if len(image_files) == 1 and image_files[0] == 'video.avi':
+            self.is_video = True
+            imgs = []
+            video_file = os.path.join(img_path, image_files[0])
+            logger.info('Detect the video file: %s' % video_file)
+
+            video = cv2.VideoCapture(video_file)
+
+            while video.isOpened():
+                ret, frame = video.read()
+                if frame is None:
+                    break
+                imgs.append(frame)
+            video.release()
+        else:
+            self.is_video = False
+            imgs = [os.path.join(img_path, i) for i in image_files]
+            imgs.sort()
+
         poly_data = read_text(poly_path)
         rect_data = read_text(rect_path)
 
@@ -84,7 +103,10 @@ class Sequence:
 
         assert len(poly_data) == len(rect_data) == len(imgs), 'length do not match! %d vs %d vs %d' \
                                                               % (len(poly_data), len(rect_data), len(imgs))
-        tmp = cv2.imread(imgs[0])
+        if self.is_video:
+            tmp = imgs[0]
+        else:
+            tmp = cv2.imread(imgs[0])
         logger.info('---- length: %d, img_size: %d, %d, %d' % (len(imgs), tmp.shape[0], tmp.shape[1], tmp.shape[2]))
         self.imgs = imgs
         self.poly_data = poly_data
@@ -260,7 +282,10 @@ class Sequence:
             else:
                 poly, rect = self.poly_data[n], self.rect_data[n]
             flag = self.flags[n] if self.flag_curr < 0 else (self.flag_curr+5)
-            inter = yield cv2.imread(img), poly, rect, n, flag
+            if self.is_video:
+                inter = yield img, poly, rect, n, flag
+            else:
+                inter = yield cv2.imread(img), poly, rect, n, flag
             n += inter
             n %= len(self.imgs)
 

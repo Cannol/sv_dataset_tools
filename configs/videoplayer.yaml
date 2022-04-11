@@ -1,7 +1,7 @@
-ScaleStart: 5
+ScaleStart: 8
 SearchRange: 2.5
-WinHeight: 1200
-WinWidth: 1200
+WinHeight: 600
+WinWidth: 600
 Attrs: 'ch'
 SameNext: true
 CyclePlay: true
