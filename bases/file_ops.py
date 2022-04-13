@@ -3,6 +3,8 @@ import numpy as np
 import cv2
 import os
 
+from configs import TMP_DIR
+
 logger = GLogger.get('base.FileOperators', 'FileOperators')
 
 
@@ -73,22 +75,35 @@ def save_text(text_file, data):
 
 
 class Sequence:
-    def __init__(self, img_path, poly_path, rect_path, state_path):
+    def __init__(self, img_path, poly_path, rect_path, state_path, using_cache=False):
         image_files = os.listdir(img_path)
 
         if len(image_files) == 1 and image_files[0] == 'video.avi':
-            self.is_video = True
+
             imgs = []
             video_file = os.path.join(img_path, image_files[0])
             logger.info('Detect the video file: %s' % video_file)
 
             video = cv2.VideoCapture(video_file)
 
+            if using_cache:
+                self.is_video = False
+                logger.info('Using caching mode. Caching dir: %s' % TMP_DIR)
+            else:
+                self.is_video = True
+
+            n = 0
             while video.isOpened():
                 ret, frame = video.read()
                 if frame is None:
                     break
-                imgs.append(frame)
+                if using_cache:
+                    n += 1
+                    save_file = os.path.join(TMP_DIR, '%06d.jpg' % n)
+                    cv2.imwrite(save_file, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
+                    imgs.append(save_file)
+                else:
+                    imgs.append(frame)
             video.release()
         else:
             self.is_video = False

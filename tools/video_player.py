@@ -52,6 +52,8 @@ class VideoPlayer(DatasetBase):
 
     SameNext = False
 
+    UsingCache = False
+
     _window_attr = None
     _show_obj = True
     _wait_time = 0
@@ -149,7 +151,7 @@ class VideoPlayer(DatasetBase):
             self._show_obj, self._wait_time, self.center_mode = v
 
     def init_data(self):
-        self.data_gen = Sequence(self.img_dir, self.poly, self.rect, self.state)
+        self.data_gen = Sequence(self.img_dir, self.poly, self.rect, self.state, using_cache=self.UsingCache)
         self.data_attr = Attr(self.attr)
 
     def _mouse_event_new_object(self, event, x, y, flags, param):

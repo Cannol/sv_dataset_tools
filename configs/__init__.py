@@ -62,6 +62,7 @@ def get_configs(config_file):
 ROOT = __PROJECT_ROOT                                 # rename it for easy way
 CONFIGS_DIR = path_exists(os.path.join(ROOT, 'configs'))
 LOGS_DIR = if_not_create(os.path.join(ROOT, 'logs'))
+TMP_DIR = if_not_create(os.path.join(ROOT, 'tmp'))
 
 # Logger file
 LOGGER_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'logger.json'))

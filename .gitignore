@@ -130,3 +130,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 /tools/data_cache/
+
+/tmp
+.tmp

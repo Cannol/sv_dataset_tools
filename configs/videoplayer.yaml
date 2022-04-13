@@ -6,6 +6,7 @@ Attrs: 'ch'
 SameNext: true
 CyclePlay: true
 FrameInfoShowOutside: false
+UsingCache: false
 
 CtrlKey: 9
 EscKey: 27
