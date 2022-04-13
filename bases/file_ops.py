@@ -99,8 +99,12 @@ class Sequence:
                     break
                 if using_cache:
                     n += 1
-                    save_file = os.path.join(TMP_DIR, '%06d.jpg' % n)
-                    cv2.imwrite(save_file, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
+                    # save_file = os.path.join(TMP_DIR, '%06d.bmp' % n)
+                    # cv2.imwrite(save_file, frame)
+                    save_file = os.path.join(TMP_DIR, '%06d.png' % n)
+                    cv2.imwrite(save_file, frame, [int(cv2.IMWRITE_PNG_COMPRESSION), 0])
+                    # save_file = os.path.join(TMP_DIR, '%06d.jpg' % n)
+                    # cv2.imwrite(save_file, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
                     imgs.append(save_file)
                 else:
                     imgs.append(frame)
