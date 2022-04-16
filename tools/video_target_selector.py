@@ -15,7 +15,6 @@ from PIL import Image, ImageFont, ImageDraw
 VERSION = '1.0 beta'
 
 
-
 class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
     _L: Logger = None
 
