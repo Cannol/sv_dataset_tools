@@ -4,6 +4,16 @@ from bases.graphic import WorkCanvas
 from bases.targets import Target
 from common import LoggerMeta
 from logging import Logger
+from bases.trackers import CVTracker
+
+
+# class AutoAnnotator(metaclass=LoggerMeta):
+#     _L: Logger = None
+#
+#     def __init__(self):
+#
+#
+#     def feed(self):
 
 
 class Annotator(WorkCanvas, metaclass=LoggerMeta):
@@ -33,6 +43,8 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         self._drag_y = 0
 
         self._tmp_frame = None
+
+        self._auto_track = None
 
         # flag color
         self._flag_color = [
@@ -150,7 +162,7 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                 right_x = max(start_x, end_x)
                 right_y = max(start_y, end_y)
                 if right_x - left_x < 2.5 or right_y - left_y < 2.5:
-                    self._L.info('Too small target!')
+                    self._L.error('Too small target!')
                     self.refresh()
                     return
                 Target.New(points=np.array([[left_x, left_y], [right_x, left_y],
@@ -188,7 +200,7 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
 
         start, end, flag = self._selected_target.key_frame_flags[self._frame.frame_index]
         self._selected_flag = flag
-        print(start, end, flag)
+        # print(start, end, flag)
 
         for point in poly_points:
             cv2.circle(frame, (point[0, 0], point[0, 1]), 4, self._flag_color[flag], -1)
@@ -240,5 +252,29 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
             if self._selected_target and self._selected_flag < 1:
                 self._selected_target.set_key_point(self._frame.frame_index)
             self.refresh()
+        elif key == 8: # backspace
+            if self._selected_target and self._selected_flag == 1:
+                self._selected_target.remove_key_point_at(self._frame.frame_index)
+
+        elif key == '_':
+            if self._selected_target:
+                while True:
+                    ans = input('确定要删除该目标[%s]？Y/N' % self._selected_target.name)
+                    if ans.strip() == 'Y':
+                        Target.RemoveTarget(self._selected_target)
+                        break
+                    elif ans.strip() == 'N':
+                        break
+
+        elif key == ord('t'):
+
+            if self._auto_track is None:
+                self._L.info('已开启自动辅助标注!')
+                self._auto_track = CVTracker(CVTracker.KCF)
+            else:
+                del self._auto_track
+                self._auto_track = None
+                self._L.info('自动辅助标注已关闭!')
         else:
             super()._key_map(key)
+

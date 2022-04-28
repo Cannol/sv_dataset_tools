@@ -1,6 +1,6 @@
-VideoFilePath: '/Users/cannol/Downloads/towmc/JL103B_MSS_20170424030850_100001228_102_001_L1B_MSS.avi'
+VideoFilePath: '/data1/ORSV/part2/ori/JL103B_MSS_20180104153259_100003219_102_001_L1B_MSS.avi'
 ImageSequence: '.tiff'
-SaveToDirectory: 'data_cache'    # 标注数据将保存在该文件夹中annotations文件夹内，其他辅助数据将存放在此路径
+SaveToDirectory: 'data_cache/targets'    # 标注数据将保存在该文件夹中annotations文件夹内，其他辅助数据将存放在此路径
 SelectArea: [3000,3000,5000,6000]
 AnnotatorWinHeight: 600
 AnnotatorWinWidth: 1200
@@ -14,7 +14,7 @@ TargetClasses:
 CacheDirectory: 'data_cache/tmp'
 CacheImage: '.tiff'
 
-WindowSize: [1200, 600]  # 不要修改
+WindowSize: [1200, 600]  # 主界面的窗口尺寸，不要修改
 
 VideoFormat: ['.mp4', '.MP4', '.avi', '.AVI']
 ErrorFrame: 'skip'   # skip, interpolation, stop

@@ -325,7 +325,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
     def LoadData(cls):
         h = hashlib.md5()
         h.update(('%s%d%d%d%d' % (cls.VideoFilePath,
-                                 cls.SelectArea[0], cls.SelectArea[1], cls.SelectArea[2], cls.SelectArea[3])).encode())
+                                  cls.SelectArea[0], cls.SelectArea[1], cls.SelectArea[2], cls.SelectArea[3])).encode())
         hash_file = h.hexdigest()
         cls._cache_data = os.path.join(cls.CacheDirectory, hash_file)
         index = 0
@@ -360,9 +360,13 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
                           for i in cls._video_info['frames']]
             player = cls(image_list)
             Target.SetLength(len(image_list))
+            Target.SetGlobalOffsize(*cls.SelectArea)
+            Target.GetAllTargets(cls.SaveToDirectory)
+
             player.run()
         except KeyError as e:
             cls._L.error('Error Occurred in program! (%s)' % e.args)
+            Target.SaveAllTargets()
             # save files automatically
         cls._L.info('Files are saved at: %s' % cls.SaveToDirectory)
         cls._L.info('Exit, good luck!')

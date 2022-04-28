@@ -177,7 +177,7 @@ class Frame(object):
 
 class AdvancedFrame(metaclass=LoggerMeta):
 
-    _L:Logger = None
+    _L: Logger = None
 
     def __init__(self, image_list, width_out, height_out, start_scale=1.0, zoom_scales: list = None):
 
@@ -185,15 +185,17 @@ class AdvancedFrame(metaclass=LoggerMeta):
         self._IMAGE_HEIGHT, self._IMAGE_WIDTH, self._IMAGE_CHANNEL = _validation(self._lst, True)
         self._length = len(self._lst)
 
-        if zoom_scales is None:
-            self.zoom_scales = [i*0.1 for i in range(1, 100)]
-        else:
-            self.zoom_scales = zoom_scales
-
         self._OUT_WIDTH = min(width_out, self._IMAGE_WIDTH)
         self._OUT_HEIGHT = min(height_out, self._IMAGE_HEIGHT)
         self._ADV_IMAGE_SIZE_WIDTH = width_out * 3
         self._ADV_IMAGE_SIZE_HEIGHT = height_out * 3
+
+        min_scale_factor = max(self._OUT_WIDTH/self._IMAGE_WIDTH, self._OUT_HEIGHT/self._IMAGE_HEIGHT)
+
+        if zoom_scales is None:
+            self.zoom_scales = [i * 0.1 for i in range(1, 100) if i*0.1 > min_scale_factor]
+        else:
+            self.zoom_scales = zoom_scales
 
         # # 如果放大倍数scale_factor比以下两个变量小，则不保持原图不变，否则启动高级切图策略
         # self._MIN_SCALE_FACTOR_WIDTH = self._MIN_IMAGE_SIZE_WIDTH / self._IMAGE_WIDTH
@@ -515,8 +517,11 @@ class WorkCanvas(CanvasBase):
 
     def _refresh(self):
         # return super()._refresh()
+        frame = self._frame.frame
+        frame_text = '%d/%d' % (self._frame.frame_index+1, len(self._frame))
+        cv2.putText(frame, frame_text, (10, 10), 0, 0.5, (255, 255, 255), 1)
 
-        return self._frame.frame
+        return frame
 
     def _mouse_event(self, key, x, y, flag, params):
         if key == cv2.EVENT_MOUSEMOVE:
@@ -573,8 +578,8 @@ class WorkCanvas(CanvasBase):
         elif key == ord('\\'):  # 用来改变图像质量
             self._frame.change_quality()
             self.refresh()
-        if key > 0:
-            print(key)
+        # if key > 0:
+        #     print(key)
 
 
 class StateShow(CanvasBase):

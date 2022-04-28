@@ -16,6 +16,33 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     _default_path = ''  # default_path
     _max_length = 0  # sequence length
 
+    _global_off_x = 0
+    _global_off_y = 0
+    _global_off_xx = 0
+    _global_off_yy = 0
+
+    def remove_file(self):
+        filename = os.path.join(self._default_path, '%s.meta' % self.name)
+        os.remove(filename)
+        return filename
+
+    @classmethod
+    def RemoveTarget(cls, target):
+        t = cls.targets_dict.get(target.name, None)
+        if t is None:
+            cls._L.info('Target is not existed!')
+        else:
+            cls.targets_dict.pop(target.name)
+            cls._L.info('Target %s is removed with file: %s' % (target.name, target.remove_file()))
+            del target
+
+    @classmethod
+    def SetGlobalOffsize(cls, off_x, off_y, off_xx, off_yy):
+        cls._global_off_x = off_x
+        cls._global_off_xx = off_xx
+        cls._global_off_y = off_y
+        cls._global_off_yy = off_yy
+
     @classmethod
     def GetTargetsRange(cls, frame_index, top, bottom, left, right):
         target_list = []
@@ -27,11 +54,25 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
 
     @classmethod
     def GetAllTargets(cls, path):
+        os.makedirs(path, exist_ok=True)
         target_files = [os.path.join(path, i) for i in os.listdir(path) if i.endswith('.meta')]
+        left = cls._global_off_x
+        right = cls._global_off_xx
+        top = cls._global_off_y
+        bottom = cls._global_off_yy
         for file in target_files:
+            yes = False
             t = Target.MakeNewFromJsonFile(file)
             name, _ = file.strip().split('.')
-            cls.targets_dict[name] = t
+            for i in range(t.start_index, t.end_index+1):
+                if t.is_in_the_range(i, left, right, top, bottom):
+                    yes = True
+                    break
+            if yes:
+                cls.targets_dict[name] = t
+                t.rect_poly_points -= [cls._global_off_x, cls._global_off_y]
+                t.__changed_flag = False
+        return len(cls.targets_dict), len(target_files)
 
     @classmethod
     def SetDefaultSavingPath(cls, path):
@@ -48,8 +89,12 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     @classmethod
     def SaveAllTargets(cls):
         for i, key, t in enumerate(cls.targets_dict.items()):
-            t.save_file()
-            cls._L.info('[%d/%d] Save target %s -> file: %s' % (i, len(cls.targets_dict), key, t.File))
+            t.rect_poly_points += [cls._global_off_x, cls._global_off_y]
+            if t.__changed_flag:
+                t.save_file()
+                cls._L.info('[%d/%d] Save target %s -> file: %s' % (i, len(cls.targets_dict), key, t.File))
+            else:
+                cls._L.info('Skipped unchanged target: %s' % t.File)
 
     def get_rect_poly(self, frame_index):
         if frame_index > self.end_index:
@@ -85,12 +130,15 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         self.visible_flags = np.zeros(self._max_length, dtype='bool')
         self.key_frame_flags = -np.ones((self._max_length, 3), dtype='int')  # (pre_index, next_index, -1 未知 1 关键帧 0 非关键帧)
 
+        self.__changed_flag = True
+
     def set_start_poly(self, points, start_index):
         self.rect_poly_points[start_index, :, :] = points[:, :]
         self.start_index = start_index
         self.end_index = start_index
         self.visible_flags[start_index] = True
         self.key_frame_flags[start_index] = [start_index, start_index, 1]
+        self.__changed_flag = True
 
     def move(self, frame_index, dx, dy):
         # self.rect_poly_points[frame_index, :, 0] += dx
@@ -124,6 +172,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
             self._add_key_point_between(frame_index, poly_points)
         elif key == -1:
             self._add_new_key_point(frame_index, poly_points)
+        self.__changed_flag = True
 
     def _add_key_point_between(self, frame_index, poly_points):
         # 在两个关键点之间添加新的关键点
@@ -176,7 +225,10 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     def remove_key_point_at(self, frame_index):
         pre_, next_, key = self.key_frame_flags[frame_index, :]
         if key == 0:
-            self._L.error('帧%d为非关键帧，不支持删除哦!' % (frame_index+1))
+            self._L.error('帧%d为非关键帧，不支持删除哦!最近的两个关键帧: %d, %d' % (frame_index+1, pre_+1, next_+1))
+            return
+        if key == -1:
+            self._L.error('该目标还没有标注到帧%d哦!' % (frame_index+1))
             return
         if pre_ == next_ == frame_index:
             self._L.error('该目标仅剩下此帧标注框，无法继续删除！')
@@ -192,6 +244,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
             self.key_frame_flags[self.end_index, 1] = self.end_index
         else:
             self._calculate_frame_between(pre_, next_)
+        self.__changed_flag = True
 
 
 # class TargetPoint(JsonTransBase, metaclass=LoggerMeta):
