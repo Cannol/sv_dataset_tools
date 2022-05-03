@@ -43,7 +43,7 @@ class Frame(object):
         self._length = len(image_list)
 
         if zoom_scale is None:
-            self.zoom_scale = [i*0.1 for i in range(1, 50)]
+            self.zoom_scale = [i*0.1 for i in range(1, 101)]
         else:
             self.zoom_scale = zoom_scale
 
@@ -190,16 +190,22 @@ class AdvancedFrame(metaclass=LoggerMeta):
         self._ADV_IMAGE_SIZE_WIDTH = width_out * 3
         self._ADV_IMAGE_SIZE_HEIGHT = height_out * 3
 
-        min_scale_factor = max(self._OUT_WIDTH/self._IMAGE_WIDTH, self._OUT_HEIGHT/self._IMAGE_HEIGHT)
+        min_scale_factor = max(self._OUT_WIDTH/self._IMAGE_WIDTH, self._OUT_HEIGHT/self._IMAGE_HEIGHT) - 0.001
 
         if zoom_scales is None:
-            self.zoom_scales = [i * 0.1 for i in range(1, 100) if i*0.1 > min_scale_factor]
+            self.zoom_scales = [i * 0.1 for i in range(1, 101) if i*0.1 > min_scale_factor]
+            # self.zoom_scales = [0.5, 0.6, 1.6, 2.6]
         else:
             self.zoom_scales = zoom_scales
 
-        # # 如果放大倍数scale_factor比以下两个变量小，则不保持原图不变，否则启动高级切图策略
-        # self._MIN_SCALE_FACTOR_WIDTH = self._MIN_IMAGE_SIZE_WIDTH / self._IMAGE_WIDTH
-        # self._MIN_SCALE_FACTOR_HEIGHT = self._MIN_IMAGE_SIZE_HEIGHT / self._IMAGE_HEIGHT
+        if 1.0 not in self.zoom_scales:
+            self.zoom_scales += [1.0]
+            self.zoom_scales.sort()
+
+        if start_scale not in self.zoom_scales:
+            assert isinstance(start_scale, float), 'start scale must be float!'
+            self.zoom_scales += [start_scale]
+            self.zoom_scales.sort()
 
         # 高级切图内参
         self._advance_off_x = 0
@@ -226,8 +232,18 @@ class AdvancedFrame(metaclass=LoggerMeta):
         self._frame_curr = None    # 从原始图像crop后resize过的帧图像
         self._frame = None         # 实际crop后的图像
 
-        self.image_qualities = [cv2.INTER_LANCZOS4, cv2.INTER_CUBIC, cv2.INTER_AREA, cv2.INTER_LINEAR_EXACT, cv2.INTER_NEAREST_EXACT]
-        self.image_quality_names = ['Lanczos4', 'Cubic', 'Area', 'LinearExact', 'NearestExact']
+        self.image_qualities = []
+        self.image_quality_names = ['Lanczos4', 'Cubic', 'fff', 'Area', 'Linear_Exact', 'aasf', 'Nearest_Exact']
+
+        for i in range(len(self.image_quality_names)-1, -1, -1):
+            name = 'INTER_' + self.image_quality_names[i].upper()
+            value = getattr(cv2, name, None)
+            if value is None:
+                self.image_quality_names.pop(i)
+                self._L.debug('Removed unsupported method: %s' % name)
+            else:
+                self.image_qualities.insert(0, value)
+
         self.image_quality_index = 0
         self._quality = self.image_qualities[self.image_quality_index]
 
@@ -518,8 +534,8 @@ class WorkCanvas(CanvasBase):
     def _refresh(self):
         # return super()._refresh()
         frame = self._frame.frame
-        frame_text = '%d/%d' % (self._frame.frame_index+1, len(self._frame))
-        cv2.putText(frame, frame_text, (10, 10), 0, 0.5, (255, 255, 255), 1)
+        frame_text = '%d/%d | %.2f%%' % (self._frame.frame_index+1, len(self._frame), self._frame.scale*100)
+        cv2.putText(frame, frame_text, (20, 20), 0, 0.5, (255, 255, 255), 1)
 
         return frame
 

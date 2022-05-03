@@ -51,6 +51,11 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
 
     TargetClasses: list = []
 
+    StartScale: float = 1.0
+    ScaleList: list = None
+
+
+
     _targets_dir = 'targets'
 
     _cache_data = ''
@@ -93,6 +98,8 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         frames = Frame(image_list=self.image_list,
                        width_out=self.AnnotatorWinWidth,
                        height_out=self.AnnotatorWinHeight,
+                       start_scale=self.StartScale,
+                       zoom_scales=self.ScaleList
                        )
         annotator = Annotator('annotation', font=self.font1, font_height=self.font1_height, classes=self.TargetClasses)
         annotator.set_frame_obj(frames)

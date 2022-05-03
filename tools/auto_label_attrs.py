@@ -3,6 +3,9 @@ from bases.file_ops import read_state_file, read_text, Attr
 import numpy as np
 import matplotlib.pyplot as plt
 
+import torch.nn as nn
+
+
 """
 用来自动生成序列的attribute：
  - STO, LTO, SM, CO, BCL
