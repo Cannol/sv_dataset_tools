@@ -303,8 +303,8 @@ class AdvancedFrame(metaclass=LoggerMeta):
         scale = self.zoom_scales[index]
         self._scale_index = index
 
-        off_x = int(scale * (self._off_x + x) / scale_ori - x)
-        off_y = int(scale * (self._off_y + y) / scale_ori - y)
+        off_x = int(round(scale * (self._off_x + x) / scale_ori - x))
+        off_y = int(round(scale * (self._off_y + y) / scale_ori - y))
         self._crop_zoom_original(off_x, off_y, scale)
 
     def zoom_from_center_index(self, index_add):
@@ -317,8 +317,8 @@ class AdvancedFrame(metaclass=LoggerMeta):
         x = self._OUT_WIDTH // 2
         y = self._OUT_HEIGHT // 2
 
-        off_x = int(scale * (self._off_x + x) / self._scale - x)
-        off_y = int(scale * (self._off_y + y) / self._scale - y)
+        off_x = int(round(scale * (self._off_x + x) / self._scale - x))
+        off_y = int(round(scale * (self._off_y + y) / self._scale - y))
 
         self._crop_zoom_original(off_x, off_y, scale)
 
