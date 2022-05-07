@@ -193,8 +193,10 @@ class AdvancedFrame(metaclass=LoggerMeta):
         min_scale_factor = max(self._OUT_WIDTH/self._IMAGE_WIDTH, self._OUT_HEIGHT/self._IMAGE_HEIGHT) - 0.001
 
         if zoom_scales is None:
-            self.zoom_scales = [i * 0.1 for i in range(1, 101) if i*0.1 > min_scale_factor]
+            # self.zoom_scales = [i * 0.1 for i in range(1, 101) if i*0.1 > min_scale_factor]
             # self.zoom_scales = [0.5, 0.6, 1.6, 2.6]
+            self.zoom_scales = [i * 0.1 for i in range(1, 9) if i*0.1 > min_scale_factor]
+            self.zoom_scales += [i * 1.0 for i in range(1, 11) if i*1.0 > min_scale_factor]
         else:
             self.zoom_scales = zoom_scales
 
@@ -221,6 +223,8 @@ class AdvancedFrame(metaclass=LoggerMeta):
         self._off_y = 0
         self._off_x_inner = 0
         self._off_y_inner = 0
+        self._advance_loss_off_x = 0
+        self._advance_loss_off_y = 0
 
         # 帧内参初始化
         self._frame_index = -1
@@ -233,7 +237,7 @@ class AdvancedFrame(metaclass=LoggerMeta):
         self._frame = None         # 实际crop后的图像
 
         self.image_qualities = []
-        self.image_quality_names = ['Lanczos4', 'Cubic', 'fff', 'Area', 'Linear_Exact', 'aasf', 'Nearest_Exact']
+        self.image_quality_names = ['Lanczos4', 'Cubic', 'Area', 'Linear_Exact', 'Nearest_Exact']
 
         for i in range(len(self.image_quality_names)-1, -1, -1):
             name = 'INTER_' + self.image_quality_names[i].upper()
@@ -339,10 +343,29 @@ class AdvancedFrame(metaclass=LoggerMeta):
         self._adv_region_ori_width = int(self._ADV_IMAGE_SIZE_WIDTH // scale)
         self._adv_region_ori_height = int(self._ADV_IMAGE_SIZE_HEIGHT // scale)
 
+        # self._advance_loss_off_x = self._advance_off_x % scale
+        # self._advance_loss_off_y = self._advance_off_y % scale
+        # xxx = self._advance_off_x - self._advance_off_x_ori * scale
+        # yyy = self._advance_off_y - self._advance_off_y_ori * scale
+
+        self._advance_off_x = int(self._advance_off_x_ori * scale)
+        self._advance_off_y = int(self._advance_off_y_ori * scale)
+        self._off_y = self._advance_off_y + self._OUT_HEIGHT
+        self._off_x = self._advance_off_x + self._OUT_WIDTH
+
+        # print(self._advance_off_y_, self._advance_off_x_)
+        # print(self._advance_off_y, self._advance_off_x)
+
         ori_x = max(self._advance_off_x_ori, 0)
         ori_y = max(self._advance_off_y_ori, 0)
         ori_xx = min(self._advance_off_x_ori+self._adv_region_ori_width, self._IMAGE_WIDTH)
         ori_yy = min(self._advance_off_y_ori+self._adv_region_ori_height, self._IMAGE_HEIGHT)
+
+        # self._adv_region_ori_loss_width = self._adv_region_ori_width*scale - self._ADV_IMAGE_SIZE_WIDTH
+        # self._adv_region_ori_loss_height = self._adv_region_ori_height*scale - self._ADV_IMAGE_SIZE_HEIGHT
+
+        # print(xxx, yyy)
+        # print(self._advance_loss_off_x, self._advance_loss_off_y, self._adv_region_ori_loss_width, self._adv_region_ori_loss_height)
 
         self._image_crop = self._original_image[ori_y:ori_yy, ori_x:ori_xx]
         self._frame_curr = cv2.resize(self._image_crop, None, fx=scale, fy=scale, interpolation=self._quality)
@@ -447,13 +470,26 @@ class CanvasBase(metaclass=LoggerMeta):
         self.__win_name = win_name
         self._frame_show = None
         self.__need_refresh = True
+        self.__win_title = win_name
 
     @property
     def win_name(self):
         return self.__win_name
 
+    @property
+    def win_title(self):
+        return self.__win_title
+
+    @win_title.setter
+    def win_title(self, value: str):
+        cv2.setWindowTitle(self.__win_name, value)
+        self.__win_title = value
+
     def refresh(self):
         self.__need_refresh = True
+
+    def __mouse_event(self, *args):
+        self._mouse_event(*args)
 
     def _mouse_event(self, key, x, y, flag, params):
         print("key:", key)
@@ -488,7 +524,7 @@ class CanvasBase(metaclass=LoggerMeta):
             assert isinstance(window_location, (List, Tuple)) and len(window_location) == 2, \
                 'Window location must be a List or a Tuple with two values -> (x, y).'
             cv2.moveWindow(self.__win_name, *window_location)
-        cv2.setMouseCallback(self.__win_name, self._mouse_event)
+        cv2.setMouseCallback(self.__win_name, self.__mouse_event)
 
         try:
             while True:
