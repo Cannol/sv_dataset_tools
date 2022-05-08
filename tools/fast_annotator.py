@@ -34,6 +34,10 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         self.__targets_insight = []
         self._selected_target: Target = None
         self._selected_target_poly = np.zeros((4, 2), dtype='float')
+        self._selected_target_poly_before = None
+        self._selected_target_poly_after = None
+        self._selected_target_poly_before_index = -1
+        self._selected_target_poly_after_index = -1
         self._select_point = -1
         self._selected_flag = -1
 
@@ -59,8 +63,10 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
             self.__classes_dict[ord(str(i+1))] = i
 
         self.__classes_color_dict = {}
+        self.__fake_classes_color_dict = {}
         for class_item in self.__classes:
             self.__classes_color_dict[class_item[0]] = class_item[1]
+            self.__fake_classes_color_dict[class_item[0]] = [int(i*0.6) for i in class_item[1]]
 
         super().__init__(win_name, font, font_height)
 
@@ -85,6 +91,7 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                 self._selected_target_poly += [dx, dy]
                 self._tmp_frame = self._frame.frame
                 selected_poly = self._selected_target_poly.astype('int').reshape((-1, 1, 2))
+                self._draw_nearest_key_frames(self._tmp_frame)
                 self._draw_select_target(self._tmp_frame, selected_poly)
                 self._quick_show(self._tmp_frame)
                 self._drag_x = x
@@ -178,6 +185,8 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                 self.__label_new_start_y = y
                 self.__label_new_end_x = x
                 self.__label_new_end_y = y
+            # if key == cv2.EVENT_MOUSEMOVE:
+            #     cv2.circle()
         else:
             if cv2.EVENT_LBUTTONDOWN == key:
                 for t, poly in self.__targets_insight:
@@ -187,20 +196,19 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                     bottom = np.max(poly[:, 1])
                     if (left <= x <= right) and (top <= y <= bottom):
                         self._selected_target = t
-                        self._selected_target_poly[:, :] = poly[:, :]
+                        # self._selected_target_poly[:, :] = poly[:, :]
                         self.refresh()
                         return
                 self._selected_target = None
                 self.refresh()
-
             super()._mouse_event(key, x, y, flag, params)
 
     def _draw_select_target(self, frame, poly_points):
         cv2.polylines(frame, [poly_points], True, self.__classes_color_dict[self._selected_target.class_name], 1, cv2.LINE_AA)
 
         start, end, flag = self._selected_target.key_frame_flags[self._frame.frame_index]
+
         self._selected_flag = flag
-        # print(start, end, flag)
 
         for point in poly_points:
             cv2.circle(frame, (point[0, 0], point[0, 1]), 4, self._flag_color[flag], -1)
@@ -208,6 +216,49 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         if 0 <= self._select_point < len(poly_points):
             point = poly_points[self._select_point]
             cv2.circle(frame, (point[0, 0], point[0, 1]), 5, [0, 255, 0], 2)
+
+    @staticmethod
+    def __calculate_points_between(start_index, end_index, start_point, end_point):
+        k = end_index - start_index
+        points = np.zeros((k+1, 2), dtype='float')
+        points[0][:] = start_point[:]
+        points[-1][:] = end_point[:]
+        if k > 1:
+            mini = (end_point - start_point) / k
+            for i in range(1, k):
+                points[i, :] = points[i - 1, :] + mini[:]
+        return points
+
+    def _draw_nearest_key_frames(self, frame):
+        color = self.__fake_classes_color_dict[self._selected_target.class_name]
+        for poly_points in [self._selected_target_poly_before, self._selected_target_poly_after]:
+            if poly_points is None:
+                continue
+            poly_points = np.around(poly_points)
+            poly_points = poly_points.astype('int')
+            poly_points = poly_points.reshape((-1, 1, 2))
+            cv2.polylines(frame, [poly_points], True, color, 1, cv2.LINE_AA)
+
+        # draw points between [before, curr] and between [curr, after]
+        print(self._selected_target_poly_before_index, self._frame.frame_index, self._selected_target_poly_after_index)
+        center_point_curr = np.average(self._selected_target_poly, axis=0)
+        # print(self._selected_target_poly)
+        if self._selected_target_poly_before is not None:
+            center_point_before = np.average(self._selected_target_poly_before, axis=0)
+            points_before = self.__calculate_points_between(self._selected_target_poly_before_index, self._frame.frame_index,
+                                                     center_point_before, center_point_curr).astype('int')
+            # points = points.astype('int')
+            for i in range(len(points_before)-1):
+                cv2.circle(frame, (points_before[i, 0], points_before[i, 1]), 2, color, -1)
+
+        if self._selected_target_poly_after is not None:
+            center_point_after = np.average(self._selected_target_poly_after, axis=0)
+            points_after = self.__calculate_points_between(self._frame.frame_index, self._selected_target_poly_after_index,
+                                                     center_point_curr, center_point_after).astype('int')
+            for i in range(1, len(points_after)):
+                cv2.circle(frame, (points_after[i, 0], points_after[i, 1]), 2, color, -1)
+
+        cv2.circle(frame, (int(center_point_curr[0]), int(center_point_curr[1])), 2, self.__classes_color_dict[self._selected_target.class_name], -1)
 
     def _draw_targets(self, frame):
         left, top, right, bottom = self._frame.range_rectangle_global
@@ -225,6 +276,19 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
             poly_points = poly_points.reshape((-1, 1, 2))
 
             if self._selected_target and self._selected_target == target:
+                (self._selected_target_poly_before_index, self._selected_target_poly_after_index,
+                 self._selected_target_poly_before, self._selected_target_poly_after) = \
+                    target.get_nearest_key_frame_rects(self._frame.frame_index)
+                if self._selected_target_poly_before is not None:
+                    self._selected_target_poly_before[:, 0] -= left
+                    self._selected_target_poly_before[:, 1] -= top
+                    self._selected_target_poly_before *= self._frame.scale
+                if self._selected_target_poly_after is not None:
+                    self._selected_target_poly_after[:, 0] -= left
+                    self._selected_target_poly_after[:, 1] -= top
+                    self._selected_target_poly_after *= self._frame.scale
+                self._selected_target_poly[:, :] = self.__targets_insight[-1][1][:, :]
+                self._draw_nearest_key_frames(frame)
                 self._draw_select_target(frame, poly_points)
             else:
                 if existed:

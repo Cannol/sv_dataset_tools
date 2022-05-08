@@ -7,6 +7,9 @@ import numpy as np
 import time
 from logging import Logger
 from common.logger import LoggerMeta
+from common.yaml_helper import YamlConfigClassBase
+
+from PIL import Image, ImageDraw
 
 
 def _validation(img_list, skip=False):
@@ -35,6 +38,9 @@ def _validation(img_list, skip=False):
                                .format(hh, ww, cc, h, w, c, img_file))
     return img_demo.shape
 
+# class KeyTester(YamlConfigClassBase):
+#     ESC = 27
+#     BACKSPACE =
 
 class Frame(object):
 
@@ -622,7 +628,7 @@ class WorkCanvas(CanvasBase):
         elif key == ord('f'):
             self._frame.next_n_frame(10)
             self.refresh()
-        elif key == ord('Q'):
+        elif key == 27:
             raise self.ExitCanvas('Exit')
         elif key == ord('r'):
             self._frame.reset_scale()
@@ -633,6 +639,41 @@ class WorkCanvas(CanvasBase):
         # if key > 0:
         #     print(key)
 
+    def quit_panel(self):
+        quit_text = '确定要结束标注并返回主界面吗？（回车确定/ESC取消）'
+        bar_height = 50.0
+        image = self._frame_show.copy()
+        h, w, c = image.shape
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        im = Image.fromarray(image)
+        draw = ImageDraw.Draw(im)
+        y_start = (h - bar_height)/2
+        draw.rectangle([0, y_start, w, y_start+bar_height], outline=None, fill=(125, 125, 125), width=1)
+
+        width, height = self.__font.getsize(quit_text)
+
+        draw.text([(w-width)/2, y_start+bar_height/2-height/2], quit_text, font=self.__font)
+
+        frame = np.array(im)
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+        self._quick_show(frame)
+
+        while True:
+            key = cv2.waitKey()
+            if key == 13: # enter
+                return True
+            elif key == 27: # esc
+                return False
+            else:
+                self._L.error('请输入回车或ESC，按其他按键无效。')
+
+    def run(self, window_location=None):
+        super(WorkCanvas, self).run(window_location)
+        while not self.quit_panel():
+            self._quick_show(self._frame_show)
+            super(WorkCanvas, self).run()
+
 
 class StateShow(CanvasBase):
 
@@ -640,8 +681,6 @@ class StateShow(CanvasBase):
         super().__init__(win_name)
 
     def _mouse_event(self, key, x, y, flag, params): pass
-
-
 
 
 if __name__ == '__main__':

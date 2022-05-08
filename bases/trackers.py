@@ -1,5 +1,5 @@
 import cv2
-import
+# import
 
 minor_ver = cv2.__version__.split('.')[0]
 

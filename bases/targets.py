@@ -1,3 +1,5 @@
+import tqdm
+
 from common.json_helper import JsonTransBase
 from common.logger import LoggerMeta
 from logging import Logger
@@ -20,6 +22,19 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     _global_off_y = 0
     _global_off_xx = 0
     _global_off_yy = 0
+
+    auto_save = True
+    auto_th = None
+
+    def to_dict(self):
+        dict_all = super(Target, self).to_dict()
+        poly_global = self.rect_poly_points + [self._global_off_x, self._global_off_y]
+        dict_all['rect_poly_points'] = poly_global.tolist()
+        return dict_all
+
+    def from_dict(self, obj_dict):
+        super(Target, self).from_dict(obj_dict)
+        self.rect_poly_points -= [self._global_off_x, self._global_off_y]
 
     def remove_file(self):
         filename = os.path.join(self._default_path, '%s.meta' % self.name)
@@ -54,13 +69,15 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
 
     @classmethod
     def GetAllTargets(cls, path):
+        cls.targets_dict.clear()
         os.makedirs(path, exist_ok=True)
         target_files = [os.path.join(path, i) for i in os.listdir(path) if i.endswith('.meta')]
-        left = cls._global_off_x
-        right = cls._global_off_xx
-        top = cls._global_off_y
-        bottom = cls._global_off_yy
-        for file in target_files:
+        left = 0
+        right = cls._global_off_xx - cls._global_off_x
+        top = 0
+        bottom = cls._global_off_yy - cls._global_off_y
+        targets = tqdm.tqdm(target_files)
+        for n, file in enumerate(targets):
             yes = False
             t = Target.MakeNewFromJsonFile(file)
             name, _ = file.strip().split('.')
@@ -70,8 +87,11 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
                     break
             if yes:
                 cls.targets_dict[name] = t
-                t.rect_poly_points -= [cls._global_off_x, cls._global_off_y]
                 t.__changed_flag = False
+                targets.write('[OK] %s' % file)
+            else:
+                targets.write('[NO] %s' % file)
+            targets.set_description('Searching...(%d | %d)' % (len(cls.targets_dict), n+1))
         return len(cls.targets_dict), len(target_files)
 
     @classmethod
@@ -88,13 +108,32 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
 
     @classmethod
     def SaveAllTargets(cls):
-        for i, key, t in enumerate(cls.targets_dict.items()):
-            t.rect_poly_points += [cls._global_off_x, cls._global_off_y]
+        for i, (key, t) in enumerate(cls.targets_dict.items()):
             if t.__changed_flag:
                 t.save_file()
-                cls._L.info('[%d/%d] Save target %s -> file: %s' % (i, len(cls.targets_dict), key, t.File))
+                cls._L.info('[%d/%d] Save changed target %s -> file: %s' % (i+1, len(cls.targets_dict), key, t.File))
             else:
-                cls._L.info('Skipped unchanged target: %s' % t.File)
+                cls._L.debug('Skipped unchanged target: %s' % t.File)
+
+    def get_nearest_key_frame_rects(self, frame_index):
+        if frame_index > self.end_index:
+            return self.end_index, -1, self.rect_poly_points[self.end_index].copy(), None
+        elif frame_index < self.start_index:
+            return -1, self.start_index, None, self.rect_poly_points[self.start_index].copy()
+        else:
+            before, after, _ = self.key_frame_flags[frame_index]
+            if frame_index == self.end_index:
+                after = -1
+                after_poly = None
+            else:
+                after_poly = self.rect_poly_points[after].copy()
+
+            if frame_index == self.start_index:
+                before = -1
+                before_poly = None
+            else:
+                before_poly = self.rect_poly_points[before].copy()
+            return before, after, before_poly, after_poly
 
     def get_rect_poly(self, frame_index):
         if frame_index > self.end_index:
@@ -160,6 +199,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         return os.path.join(self._default_path, '%s.meta' % self.name)
 
     def save_file(self, path=None):
+        # self.rect_poly_points += [self._global_off_x, self._global_off_y]
         self.Json = path if path else self.File
 
     def set_key_point(self, frame_index, poly_points=None):
@@ -245,6 +285,48 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         else:
             self._calculate_frame_between(pre_, next_)
         self.__changed_flag = True
+
+    @classmethod
+    def auto_saving_thread_func(cls, detect_delay=10000):
+        import time
+        _delay = detect_delay / 1000
+        cls.auto_save = True
+        cls._L.info('Auto save thread start! detect_delay == %d mm' % detect_delay)
+        while cls.auto_save:
+            time.sleep(_delay)
+            if not cls.auto_save:
+                break
+            for target in cls.targets_dict:
+                t: cls = cls.targets_dict[target]
+                if t.__changed_flag:
+                    try:
+                        t.save_file()
+                        t.__changed_flag = False
+                        t._L.info('Autosaved: %s' % t.name)
+                    except IOError as e:
+                        cls._L.error(e)
+        cls._L.info('Auo save thread exit!')
+
+    @classmethod
+    def start_auto(cls):
+        import threading
+        if cls.auto_th is None:
+            cls.auto_th = threading.Thread(target=cls.auto_saving_thread_func)
+            cls.auto_th.start()
+
+        else:
+            cls._L.error('You have opened the auto saving thread!')
+
+    @classmethod
+    def stop_auto(cls):
+        if cls.auto_th is not None:
+            cls.auto_save = False
+            cls._L.info('Stopping auto-saving thread...')
+            cls.auto_th.join()
+            cls._L.info('Auto-saving thread has been stopped!')
+            cls.auto_th = None
+        else:
+            cls._L.error('Auto-saving thread was not started yet!')
 
 
 # class TargetPoint(JsonTransBase, metaclass=LoggerMeta):

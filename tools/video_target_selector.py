@@ -1,7 +1,7 @@
 import os
 import cv2
 import numpy as np
-from configs import VIDEO_TARGET_SELECTOR_CONFIG_FILE, VIDEO_TARGET_SELECTOR_FONT_FILE
+from configs import VIDEO_TARGET_SELECTOR_CONFIG_FILE, VIDEO_TARGET_SELECTOR_FONT_FILE, ROOT
 from common.yaml_helper import YamlConfigClassBase
 from common.json_helper import SaveToFile, ReadFromFile
 from common.logger import LoggerMeta
@@ -54,13 +54,14 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
     StartScale: float = 1.0
     ScaleList: list = None
 
-
-
-    _targets_dir = 'targets'
+    TargetFolderName: str = 'targets'
 
     _cache_data = ''
     _interpolations = []
     _video_info = None
+    _target_dir = ''
+    _target_in_range = 0
+    _target_total = 0
 
     def __init__(self, image_list):
         self.image_list = image_list
@@ -79,14 +80,15 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         self.font0 = ImageFont.truetype(VIDEO_TARGET_SELECTOR_FONT_FILE, 30)
         _, self.font0_height = self.font0.getsize('测试高度')
 
-    # def _multi_targets_selection(self):
     def _judge_keys(self):
         return 1
 
     def _make_video(self):
         return 1
 
-    def _reload(self):
+    def _reload_targets(self):
+        self._target_in_range, self._target_total = Target.GetAllTargets(self._target_dir)
+        self._L.info('Reload targets successfully!')
         return 1
 
     def _quit(self):
@@ -107,6 +109,8 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         win_loc = self._get_win_center(*frames.frame_out_size)
         annotator.run(window_location=win_loc)
         annotator.destroy()
+        Target.SaveAllTargets()
+        self._target_in_range, self._target_total = Target.GetAllTargets(self._target_dir)
         return 1
 
     def _center_text(self, text, font=None, h=None, w=None):
@@ -133,7 +137,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
                       (u'截取坐标：', u'左上 (%d, %d), 右下 (%d, %d)' % (l_x, l_y, l_x+v_w, l_y+v_h)),
                       (u'图像格式：', u'RGB彩色' if self._video_info['is_rgb'] else u'灰度图'),
                       (u'视频编码：', '%s' % self._video_info['fourcc']),
-                      (u'目标标注：', u'%d (区域内) / %d (全图总计)' % (100, 200))]
+                      (u'目标标注：', u'%d (区域内) / %d (全图总计)' % (self._target_in_range, self._target_total))]
 
         y_put = 0
         for i, info in enumerate(video_info):
@@ -169,7 +173,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         del tmp_image
         while True:
             cv2.imshow('main', image_np)
-            print(cv2.getWindowImageRect('main'))
+            # print(cv2.getWindowImageRect('main'))
             key = cv2.waitKey(1000)
             if key in self._selections:
                 break
@@ -368,7 +372,20 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
             player = cls(image_list)
             Target.SetLength(len(image_list))
             Target.SetGlobalOffsize(*cls.SelectArea)
-            Target.GetAllTargets(cls.SaveToDirectory)
+            if not os.path.isabs(cls.SaveToDirectory):
+                cls.SaveToDirectory = os.path.join(ROOT, cls.SaveToDirectory)
+            target_dir = os.path.join(cls.SaveToDirectory, cls.TargetFolderName)
+            os.makedirs(target_dir, exist_ok=True)
+            cls._L.info('The targets is being read from: %s' % target_dir)
+            cls._target_in_range, cls._target_total = Target.GetAllTargets(target_dir)
+            cls._target_dir = target_dir
+            Target.SetDefaultSavingPath(target_dir)
+            cls._L.info('Range [%d %d %d %d] --> targets(in range | total): %d | %d' % (cls.SelectArea[0],
+                                                                                        cls.SelectArea[1],
+                                                                                        cls.SelectArea[2],
+                                                                                        cls.SelectArea[3],
+                                                                                        cls._target_in_range,
+                                                                                        cls._target_total))
 
             player.run()
         except KeyError as e:
