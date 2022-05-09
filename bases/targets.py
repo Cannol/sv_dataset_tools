@@ -23,7 +23,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     _global_off_xx = 0
     _global_off_yy = 0
 
-    auto_save = True
+    auto_save = False
     auto_th = None
 
     def to_dict(self):
@@ -308,10 +308,11 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         cls._L.info('Auo save thread exit!')
 
     @classmethod
-    def start_auto(cls):
+    def start_auto(cls, detect_delay=10000):
         import threading
         if cls.auto_th is None:
-            cls.auto_th = threading.Thread(target=cls.auto_saving_thread_func)
+            cls.auto_th = threading.Thread(name='auto_saving', target=cls.auto_saving_thread_func, daemon=True,
+                                           kwargs={'detect_delay': detect_delay})
             cls.auto_th.start()
 
         else:

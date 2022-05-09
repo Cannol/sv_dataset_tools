@@ -7,7 +7,7 @@ import numpy as np
 import time
 from logging import Logger
 from common.logger import LoggerMeta
-from common.yaml_helper import YamlConfigClassBase
+from bases.key_mapper import KeyMapper
 
 from PIL import Image, ImageDraw
 
@@ -38,9 +38,6 @@ def _validation(img_list, skip=False):
                                .format(hh, ww, cc, h, w, c, img_file))
     return img_demo.shape
 
-# class KeyTester(YamlConfigClassBase):
-#     ESC = 27
-#     BACKSPACE =
 
 class Frame(object):
 
@@ -429,9 +426,9 @@ class AdvancedFrame(metaclass=LoggerMeta):
         return self._length
 
     def previous_n_frame(self, n=1):
-        if self._scale_index == 0:
-            self._L.error(u'您已经在第一帧，不能再前啦！')
-            return
+        # if self._scale_index == 0:
+        #     self._L.error(u'您已经在第一帧，不能再前啦！')
+        #     return
         if self._frame_index - n < 0:
             self._L.warning(u'前进超出了第一帧，自动停在第一帧。')
             self.set_frame(0)
@@ -439,9 +436,9 @@ class AdvancedFrame(metaclass=LoggerMeta):
             self.set_frame(self._frame_index - n)
 
     def next_n_frame(self, n=1):
-        if self._scale_index == 0:
-            self._L.error(u'您已经在最后一帧，不能再往后啦！')
-            return
+        # if self._scale_index == 0:
+        #     self._L.error(u'您已经在最后一帧，不能再往后啦！')
+        #     return
         if self._frame_index + n < self._length:
             self.set_frame(self._frame_index + n)
         else:
@@ -661,9 +658,9 @@ class WorkCanvas(CanvasBase):
 
         while True:
             key = cv2.waitKey()
-            if key == 13: # enter
+            if key == KeyMapper.BACK_SPACE: # enter
                 return True
-            elif key == 27: # esc
+            elif key == KeyMapper.ESC: # esc
                 return False
             else:
                 self._L.error('请输入回车或ESC，按其他按键无效。')

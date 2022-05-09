@@ -55,6 +55,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
     ScaleList: list = None
 
     TargetFolderName: str = 'targets'
+    AutoSaving: int = 10000
 
     _cache_data = ''
     _interpolations = []
@@ -72,7 +73,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         self.WinHeight = self.WindowSize[1]
 
         self._selections = [ord('1'), ord('2'), ord('3'), ord('b'), ord('q')]
-        self._select_actions = [self._multi_targets_annotations, self._reload,
+        self._select_actions = [self._multi_targets_annotations, self._reload_targets,
                                 self._make_video, self._judge_keys, self._quit]
 
         self.font1 = ImageFont.truetype(VIDEO_TARGET_SELECTOR_FONT_FILE, 15)
@@ -107,6 +108,9 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         annotator.set_frame_obj(frames)
         frames.set_frame(0)
         win_loc = self._get_win_center(*frames.frame_out_size)
+        # Target.Backup(self._backup_targets)
+        if self.AutoSaving > 0:
+            Target.start_auto(self.AutoSaving)
         annotator.run(window_location=win_loc)
         annotator.destroy()
         Target.SaveAllTargets()
@@ -149,8 +153,9 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         # 生成缩略图
         small_image = cv2.imread(self.image_list[0])
         y_put = int(y_put + 1.4*self.font0_height)
+        hh, ww, _ = small_image.shape
         v_small_height = 240
-        v_small_width = int(v_small_height*v_w/v_h)
+        v_small_width = int(v_small_height*ww/hh)
         small_image = cv2.resize(small_image, (v_small_width, v_small_height))
 
         self.frame_image = np.array(im)
@@ -224,6 +229,15 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
     def _ReadVideo(cls, start_from_index=0):
         cap = cv2.VideoCapture(cls.VideoFilePath)
         x1, y1, x2, y2 = cls.SelectArea
+        video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+
+        if 0 <= x1 < x2 <= video_width and 0 <= y1 < y2 <= video_height:
+            cls._L.debug('Select area checkout pass!')
+        else:
+            cls._L.error('Select Area setting error! Out of width/height range of video.')
+            cls._L.error('The video size is width x height = %d x %d' % (video_width, video_height))
+            raise ValueError('SelectArea -- {}\n --> from: {}'.format(cls.SelectArea, VIDEO_TARGET_SELECTOR_CONFIG_FILE))
 
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         frames = ['%06d%s' % (i+1, cls.CacheImage) for i in range(frame_count)]
@@ -232,8 +246,8 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
                       'fourcc': struct.pack('i', int(cap.get(cv2.CAP_PROP_FOURCC))).decode('ascii'),
                       'fps': int(cap.get(cv2.CAP_PROP_FPS)),
                       'frame_count': frame_count,
-                      'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                      'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                      'width': video_width,
+                      'height': video_height,
                       'is_rgb': not bool(cap.get(cv2.CAP_PROP_CONVERT_RGB)),
                       'frames': frames,
                       'crop_area': [x1, y1, x2-x1, y2-y1]
@@ -250,7 +264,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
             ret, frame = cap.read()
             if ret == 0:
                 cls._DoWithErrorFrame(i, frames)
-                progress.set_description('Error occurred in reading frame (mode: %s): %d' % (cls.ErrorFrame, i+1))
+                progress.write('Error occurred in reading frame (mode: %s): %d' % (cls.ErrorFrame, i+1))
                 change.append(i)
                 continue
             if i >= start_from_index:
@@ -274,6 +288,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
                     for i in os.listdir(cls.VideoFilePath) if i.endswith(cls.ImageSequence)]
         img_list.sort()
         x1, y1, x2, y2 = cls.SelectArea
+
         frame_count = len(img_list)
         if frame_count <= 0:
             raise FileNotFoundError('Cannot read any (%s) file in directory: %s'
@@ -284,6 +299,15 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
 
         frames = ['%06d%s' % (i+1, cls.CacheImage) for i in range(frame_count)]
         height, width, channel = tmp.shape
+
+        if 0 <= x1 < x2 <= width and 0 <= y1 < y2 <= height:
+            cls._L.debug('Select area checkout pass!')
+        else:
+            cls._L.error('Select Area setting error! Out of width/height range of video.')
+            cls._L.error('The video size is width x height = %d x %d' % (width, height))
+            raise ValueError(
+                'SelectArea -- {}\n --> from: {}'.format(cls.SelectArea, VIDEO_TARGET_SELECTOR_CONFIG_FILE))
+
         video_info = {'source_path': cls.VideoFilePath,
                       'fourcc': 'MJPG',
                       'fps': 10,
