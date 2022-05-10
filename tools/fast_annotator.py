@@ -5,6 +5,7 @@ from bases.targets import Target
 from common import LoggerMeta
 from logging import Logger
 from bases.trackers import CVTracker
+from bases.key_mapper import KeyMapper
 
 
 # class AutoAnnotator(metaclass=LoggerMeta):
@@ -77,6 +78,7 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         return self.__classes[self.__annotation_state]
 
     def _mouse_event(self, key, x, y, flag, params):
+
         if self._selected_target:
             # print(key, flag, cv2.EVENT_LBUTTONDOWN, cv2.EVENT_FLAG_CTRLKEY)
             if key == cv2.EVENT_LBUTTONDOWN and flag == (cv2.EVENT_FLAG_CTRLKEY+key):
@@ -151,6 +153,7 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                     self._select_point = n
                     # print(self._select_point)
                     self.refresh()
+                return
 
         if self.__label_new:
             if key == cv2.EVENT_MOUSEMOVE:
@@ -179,7 +182,14 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
             return
 
         if self.__annotation_state >= 0:
-            if key == cv2.EVENT_LBUTTONDOWN:
+            if key == cv2.EVENT_MOUSEMOVE:
+                width, height = self._frame.frame_out_size
+                frame_ = self._frame_show.copy()
+                cv2.line(frame_, pt1=(x, 0), pt2=(x, height), color=(125, 125, 125), thickness=1, lineType=cv2.LINE_AA)
+                cv2.line(frame_, pt1=(0, y), pt2=(width, y), color=(125, 125, 125), thickness=1, lineType=cv2.LINE_AA)
+                self._quick_show(frame_)
+
+            elif key == cv2.EVENT_LBUTTONDOWN:
                 self.__label_new = True
                 self.__label_new_start_x = x
                 self.__label_new_start_y = y
@@ -189,19 +199,43 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
             #     cv2.circle()
         else:
             if cv2.EVENT_LBUTTONDOWN == key:
+
+                if self._selected_target:
+                    if self._selected_target_poly_before is not None:
+                        if self._selected_target_poly_before[0, 0] <= x <= self._selected_target_poly_before[2, 0] and \
+                           self._selected_target_poly_before[0, 1] <= y <= self._selected_target_poly_before[2, 1]:
+                            self._frame.set_frame(self._selected_target_poly_before_index)
+                            self.refresh()
+                            return
+
+                    if self._selected_target_poly_after is not None:
+                        if self._selected_target_poly_after[0, 0] <= x <= self._selected_target_poly_after[2, 0] and \
+                                self._selected_target_poly_after[0, 1] <= y <= self._selected_target_poly_after[2, 1]:
+                            self._frame.set_frame(self._selected_target_poly_after_index)
+                            self.refresh()
+                            return
+
                 for t, poly in self.__targets_insight:
                     left = np.min(poly[:, 0])
                     right = np.max(poly[:, 0])
                     top = np.min(poly[:, 1])
                     bottom = np.max(poly[:, 1])
                     if (left <= x <= right) and (top <= y <= bottom):
+                        if self._selected_target == t:
+                            return
                         self._selected_target = t
-                        # self._selected_target_poly[:, :] = poly[:, :]
                         self.refresh()
                         return
-                self._selected_target = None
-                self.refresh()
-            super()._mouse_event(key, x, y, flag, params)
+
+                if self._selected_target is not None:
+                    self._selected_target = None
+                    self._selected_target_poly_before = None
+                    self._selected_target_poly_after = None
+                    self.refresh()
+                else:
+                    super()._mouse_event(key, x, y, flag, params)
+                    return
+            super(Annotator, self)._mouse_event(key, x, y, flag, params)
 
     def _draw_select_target(self, frame, poly_points):
         cv2.polylines(frame, [poly_points], True, self.__classes_color_dict[self._selected_target.class_name], 1, cv2.LINE_AA)
@@ -240,7 +274,7 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
             cv2.polylines(frame, [poly_points], True, color, 1, cv2.LINE_AA)
 
         # draw points between [before, curr] and between [curr, after]
-        print(self._selected_target_poly_before_index, self._frame.frame_index, self._selected_target_poly_after_index)
+        # print(self._selected_target_poly_before_index, self._frame.frame_index, self._selected_target_poly_after_index)
         center_point_curr = np.average(self._selected_target_poly, axis=0)
         # print(self._selected_target_poly)
         if self._selected_target_poly_before is not None:
@@ -304,22 +338,22 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         return frame_image
 
     def _key_map(self, key):
+        # print(key)
         label_state = self.__classes_dict.get(key)
         if label_state is not None:
             self._L.info('进入标注模式：%s' % self.__classes[label_state][0])
             self.__annotation_state = label_state
+            return
         elif key == ord('0'):
             # exit new label model
             self._L.info('退出标注模式：%s' % self.__classes[self.__annotation_state][0])
             self.__annotation_state = -1
-        elif key == 13: # enter
+        elif key == KeyMapper.ENTER:  # enter
             if self._selected_target and self._selected_flag < 1:
                 self._selected_target.set_key_point(self._frame.frame_index)
-            self.refresh()
-        elif key == 8: # backspace
+        elif key == KeyMapper.BACK_SPACE:  # backspace
             if self._selected_target and self._selected_flag == 1:
                 self._selected_target.remove_key_point_at(self._frame.frame_index)
-
         elif key == '_':
             if self._selected_target:
                 while True:
@@ -329,9 +363,9 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                         break
                     elif ans.strip() == 'N':
                         break
+            return
 
         elif key == ord('t'):
-
             if self._auto_track is None:
                 self._L.info('已开启自动辅助标注!')
                 self._auto_track = CVTracker(CVTracker.KCF)
@@ -339,6 +373,6 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                 del self._auto_track
                 self._auto_track = None
                 self._L.info('自动辅助标注已关闭!')
-        else:
-            super()._key_map(key)
+
+        super()._key_map(key)
 

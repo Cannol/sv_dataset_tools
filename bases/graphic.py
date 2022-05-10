@@ -372,7 +372,7 @@ class AdvancedFrame(metaclass=LoggerMeta):
 
         self._image_crop = self._original_image[ori_y:ori_yy, ori_x:ori_xx]
         self._frame_curr = cv2.resize(self._image_crop, None, fx=scale, fy=scale, interpolation=self._quality)
-        self._adv_region_height, self._adv_region_width, _ = self._frame_curr.shape
+        self._adv_region_height, self._adv_region_width = self._frame_curr.shape[:2]
 
         self.move_delta(0, 0, False)
 
@@ -512,8 +512,9 @@ class CanvasBase(metaclass=LoggerMeta):
         return image
 
     def _key_map(self, key):
-        if key > 0:
-            print(key)
+        # if key < 0:
+        # cv2.getWindowImageRect(self.__win_name)
+        print(cv2.getWindowProperty(self.__win_name, cv2.WND_PROP_VISIBLE))
 
     def _quick_show(self, frame):
         cv2.imshow(self.win_name, frame)
@@ -522,7 +523,7 @@ class CanvasBase(metaclass=LoggerMeta):
         try:
             cv2.getWindowImageRect(self.__win_name)
         except cv2.error:
-            cv2.namedWindow(self.__win_name, cv2.WINDOW_AUTOSIZE)
+            cv2.namedWindow(self.__win_name, cv2.WINDOW_GUI_NORMAL | cv2.WINDOW_AUTOSIZE)
         if window_location is not None:
             assert isinstance(window_location, (List, Tuple)) and len(window_location) == 2, \
                 'Window location must be a List or a Tuple with two values -> (x, y).'
@@ -537,7 +538,11 @@ class CanvasBase(metaclass=LoggerMeta):
                     cv2.imshow(self.__win_name, self._frame_show)
                 key = cv2.waitKey(1)
                 if key < 0:
-                    continue
+                    if cv2.getWindowProperty(self.__win_name, cv2.WND_PROP_VISIBLE) == 0:
+                        cv2.imshow(self.__win_name, self._frame_show)
+                        key = KeyMapper.ESC
+                    else:
+                        continue
                 self._key_map(key)
         except self.ExitCanvas:
             cv2.setMouseCallback(self.__win_name, lambda *args: None)
@@ -588,6 +593,10 @@ class WorkCanvas(CanvasBase):
                 self.__drag_start_x = x
                 self.refresh()
 
+        elif key == cv2.EVENT_LBUTTONDBLCLK and flag == 1:
+            self._frame.zoom_in(x, y)
+            self.refresh()
+
         elif key == cv2.EVENT_LBUTTONDOWN:
             f = flag - key
             if f == cv2.EVENT_FLAG_ALTKEY:
@@ -615,26 +624,19 @@ class WorkCanvas(CanvasBase):
         if key == ord('a'):
             # 前一帧
             self._frame.previous_n_frame()
-            self.refresh()
         elif key == ord('s'):
             self._frame.next_n_frame()
-            self.refresh()
         elif key == ord('d'):
             self._frame.previous_n_frame(10)
-            self.refresh()
         elif key == ord('f'):
             self._frame.next_n_frame(10)
-            self.refresh()
-        elif key == 27:
+        elif key == KeyMapper.ESC:
             raise self.ExitCanvas('Exit')
         elif key == ord('r'):
             self._frame.reset_scale()
-            self.refresh()
         elif key == ord('\\'):  # 用来改变图像质量
             self._frame.change_quality()
-            self.refresh()
-        # if key > 0:
-        #     print(key)
+        self.refresh()
 
     def quit_panel(self):
         quit_text = '确定要结束标注并返回主界面吗？（回车确定/ESC取消）'
@@ -658,7 +660,7 @@ class WorkCanvas(CanvasBase):
 
         while True:
             key = cv2.waitKey()
-            if key == KeyMapper.BACK_SPACE: # enter
+            if key == KeyMapper.ENTER: # enter
                 return True
             elif key == KeyMapper.ESC: # esc
                 return False
@@ -677,7 +679,9 @@ class StateShow(CanvasBase):
     def __init__(self, win_name, font, font_height):
         super().__init__(win_name)
 
-    def _mouse_event(self, key, x, y, flag, params): pass
+    def _mouse_event(self, key, x, y, flag, params):
+        print(x,y,flag,key)
+
 
 
 if __name__ == '__main__':

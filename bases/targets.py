@@ -1,3 +1,5 @@
+import json
+
 import tqdm
 
 from common.json_helper import JsonTransBase
@@ -25,6 +27,8 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
 
     auto_save = False
     auto_th = None
+
+    NOR = 0
 
     def to_dict(self):
         dict_all = super(Target, self).to_dict()
@@ -79,7 +83,11 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         targets = tqdm.tqdm(target_files)
         for n, file in enumerate(targets):
             yes = False
-            t = Target.MakeNewFromJsonFile(file)
+            try:
+                t = Target.MakeNewFromJsonFile(file)
+            except json.decoder.JSONDecodeError as e:
+                cls._L.error('Json file error: {}'.format(file))
+                continue
             name, _ = file.strip().split('.')
             for i in range(t.start_index, t.end_index+1):
                 if t.is_in_the_range(i, left, right, top, bottom):
@@ -201,6 +209,9 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     def save_file(self, path=None):
         # self.rect_poly_points += [self._global_off_x, self._global_off_y]
         self.Json = path if path else self.File
+
+    def change_visible_state(self, flag):
+        pass
 
     def set_key_point(self, frame_index, poly_points=None):
         key = self.key_frame_flags[frame_index, 2]

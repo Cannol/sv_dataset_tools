@@ -204,7 +204,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
     def run(self):
         selection = True
         while selection:
-            cv2.namedWindow('main', flags=cv2.WINDOW_AUTOSIZE)
+            cv2.namedWindow('main', flags=cv2.WINDOW_GUI_NORMAL | cv2.WINDOW_AUTOSIZE)
             off_x, off_y = self._get_win_center(self.WinWidth, self.WinHeight)
             cv2.moveWindow('main', off_x, off_y)
             selection = self._start_selection_loop()
