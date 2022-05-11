@@ -578,8 +578,8 @@ class WorkCanvas(CanvasBase):
     def _refresh(self):
         # return super()._refresh()
         frame = self._frame.frame
-        frame_text = '%d/%d | %.2f%%' % (self._frame.frame_index+1, len(self._frame), self._frame.scale*100)
-        cv2.putText(frame, frame_text, (20, 20), 0, 0.5, (255, 255, 255), 1)
+        frame_text = '%d/%d | %.2f%% | Off_X: %d, Off_Y: %d' % (self._frame.frame_index+1, len(self._frame), self._frame.scale*100, self._frame.off_x, self._frame.off_y)
+        cv2.putText(frame, frame_text, (20, 20), 0, 0.5, (255, 255, 255), 1, lineType=cv2.LINE_AA)
 
         return frame
 

@@ -1,3 +1,4 @@
+import typing
 import yaml
 import os
 
@@ -40,7 +41,7 @@ class YamlConfigClassBase(object):
     def Save(cls, file=None):
         if file is None:
             file = cls.__SAVE_FILE__
-        content = {key: cls.__dict__[key] for key in cls.__dict__ if not key.startswith('_')}
+        content = {key: cls.__dict__[key] for key in cls.__dict__ if (not key.startswith('_'))}
         with open(file, 'w', encoding="utf-8") as f:
             yaml.safe_dump(content, f)
 

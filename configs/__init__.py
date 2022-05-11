@@ -73,3 +73,6 @@ VIDEOPLAYER_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'videoplayer.yam
 ABSCREATOR_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'abscreator.yaml'))
 VIDEO_TARGET_SELECTOR_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'video_target_selector.yaml'))
 VIDEO_TARGET_SELECTOR_FONT_FILE = file_exists(os.path.join(ROOT, 'STHeiti Light.ttc'))
+
+KEY_MAP_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'keymap.yaml'))
+MOUSE_EVENT_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'mouse_events.yaml'))

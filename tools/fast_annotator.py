@@ -41,11 +41,14 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         self._selected_target_poly_after_index = -1
         self._select_point = -1
         self._selected_flag = -1
+        self._selected_frame_flag = -1
 
         self._start_move_point = False
         self._start_drag_target = False
         self._drag_x = 0
         self._drag_y = 0
+
+        self._object_state = -1
 
         self._tmp_frame = None
 
@@ -88,6 +91,7 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                 return
 
             elif self._start_drag_target and key == cv2.EVENT_MOUSEMOVE and flag == (cv2.EVENT_FLAG_CTRLKEY+1):
+                # the left_button_down state mouse has flag == 1
                 dx = x - self._drag_x
                 dy = y - self._drag_y
                 self._selected_target_poly += [dx, dy]
@@ -238,11 +242,15 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
             super(Annotator, self)._mouse_event(key, x, y, flag, params)
 
     def _draw_select_target(self, frame, poly_points):
-        cv2.polylines(frame, [poly_points], True, self.__classes_color_dict[self._selected_target.class_name], 1, cv2.LINE_AA)
+        color = self.__classes_color_dict[self._selected_target.class_name]
+        cv2.polylines(frame, [poly_points], True, color, 1, cv2.LINE_AA)
+        state = self._selected_target.state_flags[self._frame.frame_index]
+        self._draw_target_state(frame, poly_points, state, color)
 
         start, end, flag = self._selected_target.key_frame_flags[self._frame.frame_index]
 
         self._selected_flag = flag
+        self._selected_frame_flag = self._selected_target.state_flags[self._frame.frame_index]
 
         for point in poly_points:
             cv2.circle(frame, (point[0, 0], point[0, 1]), 4, self._flag_color[flag], -1)
@@ -263,9 +271,17 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                 points[i, :] = points[i - 1, :] + mini[:]
         return points
 
+    @staticmethod
+    def _draw_target_state(frame, target_poly, state, color):
+        if state > Target.NOR:
+            cv2.line(frame, target_poly[0, 0], target_poly[2, 0], color, 1, cv2.LINE_AA)
+        if state > Target.INV:
+            cv2.line(frame, target_poly[1, 0], target_poly[3, 0], color, 1, cv2.LINE_AA)
+
     def _draw_nearest_key_frames(self, frame):
         color = self.__fake_classes_color_dict[self._selected_target.class_name]
-        for poly_points in [self._selected_target_poly_before, self._selected_target_poly_after]:
+        for poly_points, index in [(self._selected_target_poly_before, self._selected_target_poly_before_index),
+                                   (self._selected_target_poly_after, self._selected_target_poly_after_index)]:
             if poly_points is None:
                 continue
             poly_points = np.around(poly_points)
@@ -273,11 +289,15 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
             poly_points = poly_points.reshape((-1, 1, 2))
             cv2.polylines(frame, [poly_points], True, color, 1, cv2.LINE_AA)
 
+            state = self._selected_target.state_flags[index]
+            self._draw_target_state(frame, poly_points, state, color)
+
         # draw points between [before, curr] and between [curr, after]
         # print(self._selected_target_poly_before_index, self._frame.frame_index, self._selected_target_poly_after_index)
         center_point_curr = np.average(self._selected_target_poly, axis=0)
         # print(self._selected_target_poly)
         if self._selected_target_poly_before is not None:
+
             center_point_before = np.average(self._selected_target_poly_before, axis=0)
             points_before = self.__calculate_points_between(self._selected_target_poly_before_index, self._frame.frame_index,
                                                      center_point_before, center_point_curr).astype('int')
@@ -335,7 +355,38 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
     def _refresh(self):
         frame_image = super()._refresh()
         self._draw_targets(frame_image)
+
+        if self.__annotation_state >= 0:
+            label_text = 'Labeling... %s' % self.__classes[self.__annotation_state][0]
+            cv2.putText(frame_image, label_text, (20, 45), 0, 0.5, (255, 255, 255), 1, lineType=cv2.LINE_AA)
+
+        elif self._selected_target:
+            target_text = 'Target_ID: %s' % self._selected_target.name
+            cv2.putText(frame_image, target_text, (20, 45), 0, 0.5, (255, 255, 255), 1, lineType=cv2.LINE_AA)
+
+            target_state = 'State: %s (%s)' % (Target.flag_dict_en[self._selected_frame_flag],
+                                               Target.key_frame_flag_dict_en[self._selected_flag])
+            cv2.putText(frame_image, target_state, (20, 70), 0, 0.5, (255, 255, 255), 1, lineType=cv2.LINE_AA)
+            target_class = 'Class: %s' % self._selected_target.class_name
+            cv2.putText(frame_image, target_class, (20, 95), 0, 0.5, (255, 255, 255), 1, lineType=cv2.LINE_AA)
+        else:
+            static_text = 'Labeled Targets: %d' % len(Target.targets_dict)
+            cv2.putText(frame_image, static_text, (20, 45), 0, 0.5, (255, 255, 255), 1, lineType=cv2.LINE_AA)
+
         return frame_image
+
+    def _set_state_flag(self, new_flag):
+        if self._selected_target is not None:
+            if self._selected_flag == 1:
+                self._selected_target.set_object_state(
+                    self._frame.frame_index, new_flag, self._selected_target_poly_after_index)
+            elif self._selected_flag == -1:
+                self._L.error('此处没有创建关键帧，因此无法修改帧状态属性值，请创建关键帧后再操作！')
+            elif self._selected_flag == 0:
+                self._L.warning('由于处于非关键帧，操作将会修改上一个关键帧到下一个关键帧之间所有帧属性')
+                self._selected_target.set_object_state(
+                    self._selected_target_poly_before_index, new_flag, self._selected_target_poly_after_index
+                )
 
     def _key_map(self, key):
         # print(key)
@@ -343,7 +394,7 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         if label_state is not None:
             self._L.info('进入标注模式：%s' % self.__classes[label_state][0])
             self.__annotation_state = label_state
-            return
+
         elif key == ord('0'):
             # exit new label model
             self._L.info('退出标注模式：%s' % self.__classes[self.__annotation_state][0])
@@ -354,16 +405,24 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         elif key == KeyMapper.BACK_SPACE:  # backspace
             if self._selected_target and self._selected_flag == 1:
                 self._selected_target.remove_key_point_at(self._frame.frame_index)
-        elif key == '_':
+        elif key == KeyMapper.DEL:
             if self._selected_target:
                 while True:
-                    ans = input('确定要删除该目标[%s]？Y/N' % self._selected_target.name)
-                    if ans.strip() == 'Y':
+                    ans = input('确定要删除该目标[%s]？y/n' % self._selected_target.name)
+                    if ans.strip() == 'y':
                         Target.RemoveTarget(self._selected_target)
+                        self._selected_target = None
                         break
-                    elif ans.strip() == 'N':
-                        break
-            return
+                    elif ans.strip() == 'n':
+                        return
+
+        elif key == ord(','):
+            self._set_state_flag(Target.NOR)
+
+        elif key == ord('.'):
+            self._set_state_flag(Target.INV)
+        elif key == ord('/'):
+            self._set_state_flag(Target.OCC)
 
         elif key == ord('t'):
             if self._auto_track is None:

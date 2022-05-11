@@ -14,6 +14,7 @@ from PIL import Image, ImageFont, ImageDraw
 import platform
 
 from bases.targets import Target
+from bases.key_mapper import start_key_test
 
 try:
     import tkinter as tk
@@ -82,6 +83,9 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         _, self.font0_height = self.font0.getsize('测试高度')
 
     def _judge_keys(self):
+        self._L.info('Start key test...')
+        start_key_test()
+        self._L.info('End key test.')
         return 1
 
     def _make_video(self):

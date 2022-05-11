@@ -29,6 +29,12 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     auto_th = None
 
     NOR = 0
+    INV = 1
+    OCC = 2
+
+    flag_dict = ['[NOR]正常可见', '[INV]与背景混淆难以分辨', '[OCC]遮挡不可见', '[UNK]未标注']
+    flag_dict_en = ['Normal', 'Invisible', 'Occlusion', 'Unknown']
+    key_frame_flag_dict_en = ['Non-Key Frame', 'Key Frame', 'Unlabeled']
 
     def to_dict(self):
         dict_all = super(Target, self).to_dict()
@@ -89,6 +95,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
                 cls._L.error('Json file error: {}'.format(file))
                 continue
             name, _ = file.strip().split('.')
+            name = os.path.basename(name)
             for i in range(t.start_index, t.end_index+1):
                 if t.is_in_the_range(i, left, right, top, bottom):
                     yes = True
@@ -122,6 +129,8 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
                 cls._L.info('[%d/%d] Save changed target %s -> file: %s' % (i+1, len(cls.targets_dict), key, t.File))
             else:
                 cls._L.debug('Skipped unchanged target: %s' % t.File)
+
+    # def auto_track(self, from_index, to_index):
 
     def get_nearest_key_frame_rects(self, frame_index):
         if frame_index > self.end_index:
@@ -174,7 +183,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         self.name = self._rand_name_target()
         self.start_index = -1
         self.end_index = -1
-        self.visible_flags = np.zeros(self._max_length, dtype='bool')
+        self.state_flags = -np.ones(self._max_length, dtype='int')
         self.key_frame_flags = -np.ones((self._max_length, 3), dtype='int')  # (pre_index, next_index, -1 未知 1 关键帧 0 非关键帧)
 
         self.__changed_flag = True
@@ -183,7 +192,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         self.rect_poly_points[start_index, :, :] = points[:, :]
         self.start_index = start_index
         self.end_index = start_index
-        self.visible_flags[start_index] = True
+        self.state_flags[start_index] = self.NOR
         self.key_frame_flags[start_index] = [start_index, start_index, 1]
         self.__changed_flag = True
 
@@ -202,6 +211,19 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         cls._L.info('New target was created! [%s]' % obj.name)
         return obj
 
+    def set_object_state(self, from_index, state, to_index=-1):
+        if to_index < 0:
+            self.state_flags[from_index] = state
+            self._L.info('Set frame flag %s at frame %d' % (self.flag_dict[state], from_index))
+            self.__changed_flag = True
+        elif to_index > from_index:
+            self.state_flags[from_index: to_index] = state
+            self._L.info('Set frame flag %s from frame %d to frame %d' % (self.flag_dict[state], from_index, to_index))
+            self.__changed_flag = True
+        else:
+            self._L.error('from_index must be less than to_index! from_index={}, to_index={}'
+                          .format(from_index, to_index))
+
     @property
     def File(self):
         return os.path.join(self._default_path, '%s.meta' % self.name)
@@ -209,9 +231,6 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     def save_file(self, path=None):
         # self.rect_poly_points += [self._global_off_x, self._global_off_y]
         self.Json = path if path else self.File
-
-    def change_visible_state(self, flag):
-        pass
 
     def set_key_point(self, frame_index, poly_points=None):
         key = self.key_frame_flags[frame_index, 2]
@@ -250,13 +269,14 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
             self.key_frame_flags[frame_index, :] = [self.end_index, frame_index, 1]
             self.key_frame_flags[self.end_index, 1] = frame_index
             self._calculate_frame_between(self.end_index, frame_index)
-            self.visible_flags[self.end_index+1:frame_index+1] = True
+            self.state_flags[self.end_index+1:frame_index] = self.state_flags[self.end_index]
+            self.state_flags[frame_index] = self.NOR
             self.end_index = frame_index
         elif frame_index < self.start_index:
             self.key_frame_flags[frame_index, :] = [frame_index, self.start_index, 1]
             self.key_frame_flags[self.start_index, 0] = frame_index
             self._calculate_frame_between(frame_index, self.start_index)
-            self.visible_flags[frame_index:self.start_index] = True
+            self.state_flags[frame_index:self.start_index] = self.NOR
             self.start_index = frame_index
         else:
             assert False, 'Program logical error!'
@@ -270,7 +290,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     def _clear_frame_between(self, start, end):
         for i in range(start+1, end):
             self.rect_poly_points[i, :, :] = -1.0
-            self.visible_flags[i] = False
+            self.state_flags[i] = -1
             self.key_frame_flags[i, :] = [-1, -1, -1]
 
     def remove_key_point_at(self, frame_index):
@@ -316,7 +336,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
                         t._L.info('Autosaved: %s' % t.name)
                     except IOError as e:
                         cls._L.error(e)
-        cls._L.info('Auo save thread exit!')
+        cls._L.info('Auto save thread exit!')
 
     @classmethod
     def start_auto(cls, detect_delay=10000):
