@@ -392,18 +392,22 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         # print(key)
         label_state = self.__classes_dict.get(key)
         if label_state is not None:
-            self._L.info('进入标注模式：%s' % self.__classes[label_state][0])
-            self.__annotation_state = label_state
+            if self._selected_target is None:
+                self._L.info('进入标注模式：%s' % self.__classes[label_state][0])
+                self.__annotation_state = label_state
+            else:
+                self._selected_target.change_target_class(self.__classes[label_state][0])
 
         elif key == ord('0'):
             # exit new label model
             self._L.info('退出标注模式：%s' % self.__classes[self.__annotation_state][0])
             self.__annotation_state = -1
+        
         elif key == KeyMapper.ENTER:  # enter
             if self._selected_target and self._selected_flag < 1:
                 self._selected_target.set_key_point(self._frame.frame_index)
         elif key == KeyMapper.BACK_SPACE:  # backspace
-            if self._selected_target and self._selected_flag == 1:
+            if self._selected_target:
                 self._selected_target.remove_key_point_at(self._frame.frame_index)
         elif key == KeyMapper.DEL:
             if self._selected_target:
@@ -424,14 +428,8 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         elif key == ord('/'):
             self._set_state_flag(Target.OCC)
 
-        elif key == ord('t'):
-            if self._auto_track is None:
-                self._L.info('已开启自动辅助标注!')
-                self._auto_track = CVTracker(CVTracker.KCF)
-            else:
-                del self._auto_track
-                self._auto_track = None
-                self._L.info('自动辅助标注已关闭!')
+        elif key == ord('`'):
+            Target.SaveAllTargets()
 
         super()._key_map(key)
 

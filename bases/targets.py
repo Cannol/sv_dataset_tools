@@ -40,6 +40,9 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         dict_all = super(Target, self).to_dict()
         poly_global = self.rect_poly_points + [self._global_off_x, self._global_off_y]
         dict_all['rect_poly_points'] = poly_global.tolist()
+        dict_all['state_flags'] = self.state_flags.tolist()
+        dict_all['key_frame_flags'] = self.key_frame_flags.tolist()
+        # print(dict_all)
         return dict_all
 
     def from_dict(self, obj_dict):
@@ -123,14 +126,31 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
 
     @classmethod
     def SaveAllTargets(cls):
+        save_n = 0
+        err_n = 0
         for i, (key, t) in enumerate(cls.targets_dict.items()):
-            if t.__changed_flag:
-                t.save_file()
-                cls._L.info('[%d/%d] Save changed target %s -> file: %s' % (i+1, len(cls.targets_dict), key, t.File))
-            else:
-                cls._L.debug('Skipped unchanged target: %s' % t.File)
+            try:
+                if t.__changed_flag:
+                    t.save_file()
+                    cls._L.info('[%d/%d] Save changed target %s -> file: %s' % (i+1, len(cls.targets_dict), key, t.File))
+                    save_n += 1
+                else:
+                    cls._L.debug('Skipped unchanged target: %s' % t.File)
+            except (TypeError, IOError) as e:
+                cls._L.error('Save target error: %s' % t.name)
+                cls._L.error(e)
+                err_n += 1
+        cls._L.info('|= Save All Summary ==> Saved Target: %d, Total: %d, Error Saved: %d' % (save_n, len(cls.targets_dict), err_n))
 
     # def auto_track(self, from_index, to_index):
+
+    def change_target_class(self, new_class_name):
+        if self.class_name != new_class_name:
+            self._L.info('修改目标类别为：%s --> %s' % (self.class_name, new_class_name))
+            self.class_name = new_class_name
+            self.__changed_flag = True
+        else:
+            self._L.info('当前目标类别未修改')
 
     def get_nearest_key_frame_rects(self, frame_index):
         if frame_index > self.end_index:
@@ -288,7 +308,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         self._calculate_frame_between(frame_index, next_, False)
 
     def _clear_frame_between(self, start, end):
-        for i in range(start+1, end):
+        for i in range(start, end):
             self.rect_poly_points[i, :, :] = -1.0
             self.state_flags[i] = -1
             self.key_frame_flags[i, :] = [-1, -1, -1]
@@ -301,20 +321,26 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         if key == -1:
             self._L.error('该目标还没有标注到帧%d哦!' % (frame_index+1))
             return
-        if pre_ == next_ == frame_index:
-            self._L.error('该目标仅剩下此帧标注框，无法继续删除！')
+        if self.start_index == self.end_index == frame_index:
+            self._L.error('该目标仅剩下此帧标注框，无法继续删除，您可以按delete删除该目标！')
             return
 
-        if frame_index == pre_:
-            self._clear_frame_between(self.start_index-1, next_)
-            self.start_index = next_
+        if frame_index == self.start_index:
+            self._clear_frame_between(self.start_index, next_)
+            self.set_object_state(frame_index, -1, next_)
+            self.start_index = int(next_)
             self.key_frame_flags[self.start_index, 0] = self.start_index
-        elif frame_index == next_:
-            self._clear_frame_between(pre_, frame_index+1)
-            self.end_index = pre_
+        elif frame_index == self.end_index:
+            self._clear_frame_between(pre_+1, frame_index+1)
+            self.set_object_state(pre_+1, -1, frame_index+1)
+            self.end_index = int(pre_)
             self.key_frame_flags[self.end_index, 1] = self.end_index
         else:
             self._calculate_frame_between(pre_, next_)
+            self.key_frame_flags[pre_, 1] = next_
+            self.key_frame_flags[next_, 0] = pre_
+            self.set_object_state(pre_, self.state_flags[pre_], next_)
+            
         self.__changed_flag = True
 
     @classmethod
@@ -334,7 +360,8 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
                         t.save_file()
                         t.__changed_flag = False
                         t._L.info('Autosaved: %s' % t.name)
-                    except IOError as e:
+                    except (IOError,TypeError) as e:
+                        cls._L.error('Save target error: %s' % t.name)
                         cls._L.error(e)
         cls._L.info('Auto save thread exit!')
 

@@ -117,6 +117,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
             Target.start_auto(self.AutoSaving)
         annotator.run(window_location=win_loc)
         annotator.destroy()
+        Target.stop_auto()
         Target.SaveAllTargets()
         self._target_in_range, self._target_total = Target.GetAllTargets(self._target_dir)
         return 1
