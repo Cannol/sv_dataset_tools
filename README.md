@@ -5,13 +5,13 @@
 
 
 # Python环境需求(没有标注具体版本的安装默认最新即可)
-- python == 3.8.*
+- python == 3.8.*  （这个很重要，一定要是3.8版本的，否则下面的一些版本会对不上）
 - opencv-python == 4.5.5.62
 - numpy == 1.22.*
 - matplotlib
 - coloredlogs
 - opencv-contrib-python == 4.5.5.64
-- pillow
+- pillow == 9.0.*
 - pyyaml
 - tqdm
 

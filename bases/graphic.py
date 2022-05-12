@@ -472,8 +472,12 @@ class CanvasBase(metaclass=LoggerMeta):
     def __init__(self, win_name):
         self.__win_name = win_name
         self._frame_show = None
+        self._stop_mouse_event = False
         self.__need_refresh = True
         self.__win_title = win_name
+
+    def enable_mouse_event(self, enable=True):
+        self._stop_mouse_event = not enable
 
     @property
     def win_name(self):
@@ -492,6 +496,8 @@ class CanvasBase(metaclass=LoggerMeta):
         self.__need_refresh = True
 
     def __mouse_event(self, *args):
+        if self._stop_mouse_event:
+            return
         self._mouse_event(*args)
 
     def _mouse_event(self, key, x, y, flag, params):
@@ -596,6 +602,10 @@ class WorkCanvas(CanvasBase):
         elif key == cv2.EVENT_LBUTTONDBLCLK and flag == 1:
             self._frame.zoom_in(x, y)
             self.refresh()
+        
+        elif key == cv2.EVENT_RBUTTONDBLCLK:
+            self._frame.zoom_out(x, y)
+            self.refresh()
 
         elif key == cv2.EVENT_LBUTTONDOWN:
             f = flag - key
@@ -607,7 +617,7 @@ class WorkCanvas(CanvasBase):
                 # 缩小
                 self._frame.zoom_out(x, y)
                 self.refresh()
-            elif f == cv2.EVENT_FLAG_CTRLKEY:
+            else:
                 # print('drag')
                 self.__drag = True
                 self.__drag_start_x = x
@@ -638,8 +648,18 @@ class WorkCanvas(CanvasBase):
             self._frame.change_quality()
         self.refresh()
 
-    def quit_panel(self):
-        quit_text = '确定要结束标注并返回主界面吗？（回车确定/ESC取消）'
+    def ask_message(self, message, ok_key=None, ok_key_name=None, cancel_key=None, cancel_key_name=None):
+
+        self.enable_mouse_event(False)
+
+        ok_key_name = '回车' if ok_key is None else ok_key_name
+        ok_key = KeyMapper.ENTER if ok_key is None else ok_key
+        
+        cancel_key_name = 'ESC' if cancel_key is None else cancel_key_name
+        cancel_key = KeyMapper.ESC if cancel_key is None else cancel_key
+
+        message += '(%s确定/%s取消)' % (ok_key_name, cancel_key_name)
+        
         bar_height = 50.0
         image = self._frame_show.copy()
         h, w, c = image.shape
@@ -649,9 +669,9 @@ class WorkCanvas(CanvasBase):
         y_start = (h - bar_height)/2
         draw.rectangle([0, y_start, w, y_start+bar_height], outline=None, fill=(125, 125, 125), width=1)
 
-        width, height = self.__font.getsize(quit_text)
+        width, height = self.__font.getsize(message)
 
-        draw.text([(w-width)/2, y_start+bar_height/2-height/2], quit_text, font=self.__font)
+        draw.text([(w-width)/2, y_start+bar_height/2-height/2], message, font=self.__font)
 
         frame = np.array(im)
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
@@ -659,13 +679,22 @@ class WorkCanvas(CanvasBase):
         self._quick_show(frame)
 
         while True:
-            key = cv2.waitKey()
-            if key == KeyMapper.ENTER: # enter
+            key = cv2.waitKey(0)
+            if key == ok_key: # enter
+                self.enable_mouse_event(True)
+                self._quick_show(self._frame_show)
                 return True
-            elif key == KeyMapper.ESC: # esc
+            elif key == cancel_key: # esc
+                self.enable_mouse_event(True)
+                self._quick_show(self._frame_show)
                 return False
             else:
-                self._L.error('请输入回车或ESC，按其他按键无效。')
+                self._L.error('请输入%s或%s，按其他按键无效。' % (ok_key_name, cancel_key_name))
+        
+
+    def quit_panel(self):
+        quit_text = '确定要结束标注并返回主界面吗？'
+        return self.ask_message(quit_text, KeyMapper.ENTER, '回车', KeyMapper.ESC, 'ESC')
 
     def run(self, window_location=None):
         super(WorkCanvas, self).run(window_location)

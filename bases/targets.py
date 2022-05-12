@@ -11,6 +11,8 @@ import hashlib
 import time
 import numpy as np
 
+import datetime
+
 
 class Target(JsonTransBase, metaclass=LoggerMeta):
     _L: Logger = None
@@ -27,6 +29,8 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
 
     auto_save = False
     auto_th = None
+    _working = False
+    _pause = False
 
     NOR = 0
     INV = 1
@@ -37,6 +41,8 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     key_frame_flag_dict_en = ['Non-Key Frame', 'Key Frame', 'Unlabeled']
 
     def to_dict(self):
+        self.start_index = int(self.start_index)
+        self.end_index = int(self.end_index)
         dict_all = super(Target, self).to_dict()
         poly_global = self.rect_poly_points + [self._global_off_x, self._global_off_y]
         dict_all['rect_poly_points'] = poly_global.tolist()
@@ -44,6 +50,14 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         dict_all['key_frame_flags'] = self.key_frame_flags.tolist()
         # print(dict_all)
         return dict_all
+
+    @classmethod
+    def set_pause(cls, pause_value):
+        if cls.auto_th is not None:
+            if pause_value:
+                while cls._working:
+                    time.sleep(1.0)
+            cls._pause = pause_value
 
     def from_dict(self, obj_dict):
         super(Target, self).from_dict(obj_dict)
@@ -128,6 +142,17 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     def SaveAllTargets(cls):
         save_n = 0
         err_n = 0
+        time_out = 0
+        while cls._working:
+            time.sleep(1000)
+            time_out += 1
+            if time_out > 10:
+                cls._pause = False
+            if time_out > 20:
+                cls._pause = False
+                cls._L.error('Waiting auto thread time out, saving all targets in force manner.')
+                break
+        cls._L.pause = True
         for i, (key, t) in enumerate(cls.targets_dict.items()):
             try:
                 if t.__changed_flag:
@@ -141,8 +166,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
                 cls._L.error(e)
                 err_n += 1
         cls._L.info('|= Save All Summary ==> Saved Target: %d, Total: %d, Error Saved: %d' % (save_n, len(cls.targets_dict), err_n))
-
-    # def auto_track(self, from_index, to_index):
+        cls._pause = False
 
     def change_target_class(self, new_class_name):
         if self.class_name != new_class_name:
@@ -207,6 +231,19 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         self.key_frame_flags = -np.ones((self._max_length, 3), dtype='int')  # (pre_index, next_index, -1 未知 1 关键帧 0 非关键帧)
 
         self.__changed_flag = True
+
+    def show_target_abs(self):
+        
+        abstract = """
+                      ========== Target Abstract ===========
+                        ID: %s
+                        Class: %s
+                        Start Frame: %d
+                        End Frame: %d
+                        Created Time: %s
+                      ======================================
+                   """ % (self.name, self.class_name, self.start_index + 1, self.end_index+1, datetime.datetime.fromtimestamp(self.create_timestamp).strftime("%Y-%m-%d %H:%M:%S.%f"))
+        self._L.info(abstract)
 
     def set_start_poly(self, points, start_index):
         self.rect_poly_points[start_index, :, :] = points[:, :]
@@ -351,7 +388,11 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         cls._L.info('Auto save thread start! detect_delay == %d mm' % detect_delay)
         while cls.auto_save:
             time.sleep(_delay)
+            while cls._pause:
+                time.sleep(1.0)
+            cls._working = True
             if not cls.auto_save:
+                cls._working = False
                 break
             for target in cls.targets_dict:
                 t: cls = cls.targets_dict[target]
@@ -363,6 +404,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
                     except (IOError,TypeError) as e:
                         cls._L.error('Save target error: %s' % t.name)
                         cls._L.error(e)
+            cls._working = False
         cls._L.info('Auto save thread exit!')
 
     @classmethod

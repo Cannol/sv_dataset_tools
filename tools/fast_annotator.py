@@ -247,9 +247,9 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         state = self._selected_target.state_flags[self._frame.frame_index]
         self._draw_target_state(frame, poly_points, state, color)
 
-        start, end, flag = self._selected_target.key_frame_flags[self._frame.frame_index]
+        flag = self._selected_target.key_frame_flags[self._frame.frame_index, 2]
 
-        self._selected_flag = flag
+        self._selected_flag = int(flag)
         self._selected_frame_flag = self._selected_target.state_flags[self._frame.frame_index]
 
         for point in poly_points:
@@ -411,13 +411,16 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                 self._selected_target.remove_key_point_at(self._frame.frame_index)
         elif key == KeyMapper.DEL:
             if self._selected_target:
+                target = self._selected_target
                 while True:
-                    ans = input('确定要删除该目标[%s]？y/n' % self._selected_target.name)
-                    if ans.strip() == 'y':
-                        Target.RemoveTarget(self._selected_target)
+                    ans = self.ask_message(message='确定要删除该目标[%s]？' % target.name, ok_key=ord('y'), cancel_key=ord('n'), ok_key_name='y', cancel_key_name='n')
+                    if ans:
+                        Target.set_pause(True)
+                        Target.RemoveTarget(target)
                         self._selected_target = None
+                        Target.set_pause(False)
                         break
-                    elif ans.strip() == 'n':
+                    else:
                         return
 
         elif key == ord(','):
@@ -430,6 +433,10 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
 
         elif key == ord('`'):
             Target.SaveAllTargets()
+
+        elif key == ord('i'):
+            if self._selected_target:
+                self._selected_target.show_target_abs()
 
         super()._key_map(key)
 
