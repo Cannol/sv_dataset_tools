@@ -1,0 +1,8 @@
+opencv-python == 4.5.5.62
+numpy == 1.22.*
+matplotlib
+coloredlogs
+opencv-contrib-python == 4.5.5.64
+pillow
+pyyaml
+tqdm

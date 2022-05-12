@@ -28,7 +28,7 @@ except ImportError:
     DisplayHeight = -1
     DisplayWidth = -1
 
-VERSION = '1.0 beta'
+VERSION = '1.1 beta'
 
 
 class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
