@@ -13,7 +13,7 @@ TargetClasses:
   - ['airplane', [255, 255, 0]]
   - ['train', [255, 0 ,255]]
 
-CacheDirectory: '../tmp'
+CacheDirectory: 'tmp'
 CacheImage: '.tiff'
 
 WindowSize: [1200, 600]  # 主界面的窗口尺寸，不要修改
