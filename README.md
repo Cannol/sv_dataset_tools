@@ -30,7 +30,7 @@
 
 我们提供了requirement.txt文件，您可以直接在python环境中通过pip来安装他们：
 ``` shell
-pip install -r requirement.txt -i https://mirrors.aliyun.com/pypi/simple
+pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple
 ```
 
 # 配置与进入
