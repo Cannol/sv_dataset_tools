@@ -176,7 +176,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         image = Image.fromarray(tmp_image)
         draw = ImageDraw.Draw(image)  # 绘图句柄
         start_y = end_y + 20
-        text = u'按1进入多目标标注模式，按2重新加载视频，按3制作标注结果视频，按b进入按键调试模式，按q退出工具'
+        text = u'按1进入多目标标注模式，按2重新加载目标，按3制作标注结果视频，按b进入按键调试模式，按q退出工具'
         start_x, start_y = self._center_text(text, self.font1, h=start_y)
         draw.text((start_x, start_y), text, font=self.font1, fill='yellow')
         image_np = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)

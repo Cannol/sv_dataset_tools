@@ -402,6 +402,15 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
             # exit new label model
             self._L.info('退出标注模式：%s' % self.__classes[self.__annotation_state][0])
             self.__annotation_state = -1
+
+        elif key == KeyMapper.ESC:
+            if self._selected_target:
+                self._selected_target = None
+                key = -255
+            elif self.__annotation_state >= 0:
+                self._L.info('退出标注模式：%s' % self.__classes[self.__annotation_state][0])
+                self.__annotation_state = -1
+                key = -255
         
         elif key == KeyMapper.ENTER:  # enter
             if self._selected_target and self._selected_flag < 1:
