@@ -43,6 +43,8 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         self._selected_flag = -1
         self._selected_frame_flag = -1
 
+        self._show_rect_keyframe = True
+
         self._start_move_point = False
         self._start_drag_target = False
         self._drag_x = 0
@@ -204,7 +206,7 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         else:
             if cv2.EVENT_LBUTTONDOWN == key:
 
-                if self._selected_target:
+                if self._selected_target and self._show_rect_keyframe:
                     if self._selected_target_poly_before is not None:
                         if self._selected_target_poly_before[0, 0] <= x <= self._selected_target_poly_before[2, 0] and \
                            self._selected_target_poly_before[0, 1] <= y <= self._selected_target_poly_before[2, 1]:
@@ -280,17 +282,19 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
 
     def _draw_nearest_key_frames(self, frame):
         color = self.__fake_classes_color_dict[self._selected_target.class_name]
-        for poly_points, index in [(self._selected_target_poly_before, self._selected_target_poly_before_index),
-                                   (self._selected_target_poly_after, self._selected_target_poly_after_index)]:
-            if poly_points is None:
-                continue
-            poly_points = np.around(poly_points)
-            poly_points = poly_points.astype('int')
-            poly_points = poly_points.reshape((-1, 1, 2))
-            cv2.polylines(frame, [poly_points], True, color, 1, cv2.LINE_AA)
 
-            state = self._selected_target.state_flags[index]
-            self._draw_target_state(frame, poly_points, state, color)
+        if self._show_rect_keyframe:
+            for poly_points, index in [(self._selected_target_poly_before, self._selected_target_poly_before_index),
+                                       (self._selected_target_poly_after, self._selected_target_poly_after_index)]:
+                if poly_points is None:
+                    continue
+                poly_points = np.around(poly_points)
+                poly_points = poly_points.astype('int')
+                poly_points = poly_points.reshape((-1, 1, 2))
+                cv2.polylines(frame, [poly_points], True, color, 1, cv2.LINE_AA)
+
+                state = self._selected_target.state_flags[index]
+                self._draw_target_state(frame, poly_points, state, color)
 
         # draw points between [before, curr] and between [curr, after]
         # print(self._selected_target_poly_before_index, self._frame.frame_index, self._selected_target_poly_after_index)
@@ -431,6 +435,8 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                         break
                     else:
                         return
+        elif key == ord('v'):
+            self._show_rect_keyframe = not self._show_rect_keyframe
 
         elif key == ord(','):
             self._set_state_flag(Target.NOR)

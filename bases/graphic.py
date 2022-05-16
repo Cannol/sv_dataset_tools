@@ -445,6 +445,12 @@ class AdvancedFrame(metaclass=LoggerMeta):
             self._L.warning(u'前进超出了最后一帧，自动停在最后一帧。')
             self.set_frame(self._length - 1)
 
+    def to_the_first_frame(self):
+        self.set_frame(0)
+
+    def to_the_last_frame(self):
+        self.set_frame(self._length - 1)
+
     def change_quality(self):
         self.image_quality_index += 1
         self.image_quality_index %= len(self.image_qualities)
@@ -632,7 +638,6 @@ class WorkCanvas(CanvasBase):
 
     def _key_map(self, key):
         if key == ord('a'):
-            # 前一帧
             self._frame.previous_n_frame()
         elif key == ord('s'):
             self._frame.next_n_frame()
@@ -640,6 +645,10 @@ class WorkCanvas(CanvasBase):
             self._frame.previous_n_frame(10)
         elif key == ord('f'):
             self._frame.next_n_frame(10)
+        elif key == ord('z'):
+            self._frame.to_the_first_frame()
+        elif key == ord('x'):
+            self._frame.to_the_last_frame()
         elif key == KeyMapper.ESC:
             raise self.ExitCanvas('Exit')
         elif key == ord('r'):
@@ -690,7 +699,6 @@ class WorkCanvas(CanvasBase):
                 return False
             else:
                 self._L.error('请输入%s或%s，按其他按键无效。' % (ok_key_name, cancel_key_name))
-        
 
     def quit_panel(self):
         quit_text = '确定要结束标注并返回主界面吗？'
@@ -710,7 +718,6 @@ class StateShow(CanvasBase):
 
     def _mouse_event(self, key, x, y, flag, params):
         print(x,y,flag,key)
-
 
 
 if __name__ == '__main__':
