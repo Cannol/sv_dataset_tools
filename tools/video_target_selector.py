@@ -28,7 +28,7 @@ except ImportError:
     DisplayHeight = -1
     DisplayWidth = -1
 
-VERSION = '1.2.1 r'
+VERSION = '1.2.2 r'
 
 
 class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
@@ -57,6 +57,8 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
 
     TargetFolderName: str = 'targets'
     AutoSaving: int = 10000
+
+    # SaveLastState: bool = False
 
     _cache_data = ''
     _interpolations = []

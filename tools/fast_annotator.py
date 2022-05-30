@@ -1,3 +1,4 @@
+from re import T
 import cv2
 import numpy as np
 from bases.graphic import WorkCanvas
@@ -44,6 +45,9 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         self._selected_frame_flag = -1
 
         self._show_rect_keyframe = True
+        self._show_black_rect = True
+        self._show_select_rect = True
+        self._solo_mode = False
 
         self._start_move_point = False
         self._start_drag_target = False
@@ -245,7 +249,8 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
 
     def _draw_select_target(self, frame, poly_points):
         color = self.__classes_color_dict[self._selected_target.class_name]
-        cv2.polylines(frame, [poly_points], True, color, 1, cv2.LINE_AA)
+        if self._show_select_rect:
+            cv2.polylines(frame, [poly_points], True, color, 1, cv2.LINE_AA)
         state = self._selected_target.state_flags[self._frame.frame_index]
         self._draw_target_state(frame, poly_points, state, color)
 
@@ -319,21 +324,32 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         cv2.circle(frame, (int(center_point_curr[0]), int(center_point_curr[1])), 2, self.__classes_color_dict[self._selected_target.class_name], -1)
 
     def _draw_targets(self, frame):
+
         left, top, right, bottom = self._frame.range_rectangle_global
-        targets = Target.GetTargetsRange(self._frame.frame_index, top, bottom, left, right)
-        self.__targets_insight.clear()
+
+        if self._solo_mode and self._selected_target:
+            self.__targets_insight.clear()
+            targets = [self._selected_target]
+        else:
+            targets = Target.GetTargetsRange(self._frame.frame_index, top, bottom, left, right)
+            self.__targets_insight.clear()
+
         for target in targets:
             existed, poly_points = target.get_rect_poly(self._frame.frame_index)
             # poly_points = target.rect_poly_points[self._frame.frame_index].copy()
             poly_points[:, 0] -= left
             poly_points[:, 1] -= top
             poly_points *= self._frame.scale
-            self.__targets_insight.append([target, poly_points.copy()])
+            # self.__targets_insight.append([target, poly_points.copy()])
+            poly_points_ori = poly_points.copy()
+            
             poly_points = np.around(poly_points)
             poly_points = poly_points.astype('int')
             poly_points = poly_points.reshape((-1, 1, 2))
 
             if self._selected_target and self._selected_target == target:
+                self.__targets_insight.append([target, poly_points_ori])
+
                 (self._selected_target_poly_before_index, self._selected_target_poly_after_index,
                  self._selected_target_poly_before, self._selected_target_poly_after) = \
                     target.get_nearest_key_frame_rects(self._frame.frame_index)
@@ -350,10 +366,12 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                 self._draw_select_target(frame, poly_points)
             else:
                 if existed:
+                    self.__targets_insight.append([target, poly_points_ori])
                     cv2.polylines(frame, [poly_points], True, self.__classes_color_dict[target.class_name], 1,
                                   cv2.LINE_AA)
-                else:
+                elif self._show_black_rect:
                     # 对于不存在的目标显示为暗色
+                    self.__targets_insight.append([target, poly_points_ori])
                     cv2.polylines(frame, [poly_points], True, [0, 0, 0], 1, cv2.LINE_AA)
 
     def _refresh(self):
@@ -410,11 +428,11 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         elif key == KeyMapper.ESC:
             if self._selected_target:
                 self._selected_target = None
-                key = -255
+                key = -99999
             elif self.__annotation_state >= 0:
                 self._L.info('退出标注模式：%s' % self.__classes[self.__annotation_state][0])
                 self.__annotation_state = -1
-                key = -255
+                key = -99999
         
         elif key == KeyMapper.ENTER:  # enter
             if self._selected_target and self._selected_flag < 1:
@@ -435,8 +453,25 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                         break
                     else:
                         return
+        elif key == KeyMapper.BLANK_SPACE:
+            self._solo_mode = not self._solo_mode
+
+        elif key == ord('b'):
+            self._show_black_rect = not self._show_black_rect
+
         elif key == ord('v'):
             self._show_rect_keyframe = not self._show_rect_keyframe
+
+        elif key == ord('c'):
+            self._show_select_rect = not self._show_select_rect
+
+        elif key == ord('q'):
+            if self._selected_target and self._selected_target_poly_before is not None:
+                self._frame.set_frame(self._selected_target_poly_before_index)
+        
+        elif key == ord('w'):
+            if self._selected_target and self._selected_target_poly_after is not None:
+                self._frame.set_frame(self._selected_target_poly_after_index)
 
         elif key == ord(','):
             self._set_state_flag(Target.NOR)
@@ -452,6 +487,8 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
         elif key == ord('i'):
             if self._selected_target:
                 self._selected_target.show_target_abs()
+            else:
+                return
 
         super()._key_map(key)
 

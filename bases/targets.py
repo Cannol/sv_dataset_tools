@@ -232,6 +232,16 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
 
         self.__changed_flag = True
 
+    def copy(self):
+        obj = Target()
+        obj.rect_poly_points = self.rect_poly_points.copy()
+        obj.class_name = self.class_name
+        obj.start_index = self.start_index
+        obj.end_index = self.end_index
+        obj.state_flags = self.state_flags.copy()
+        obj.key_frame_flags = self.key_frame_flags.copy()
+        return obj
+
     def show_target_abs(self):
         
         abstract = """
@@ -379,6 +389,9 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
             self.set_object_state(pre_, self.state_flags[pre_], next_)
             
         self.__changed_flag = True
+    
+    def remove_after_frame(self, index):
+        self._clear_frame_between(index+1, self.end_index)
 
     @classmethod
     def auto_saving_thread_func(cls, detect_delay=10000):
@@ -428,6 +441,28 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
             cls.auto_th = None
         else:
             cls._L.error('Auto-saving thread was not started yet!')
+
+    @classmethod
+    def merge_target(cls, target_a, target_b, frame_index):
+        """
+        target_a从frame_index开始往后添加target_b的关键帧
+        """
+        assert isinstance(target_a, cls)
+        assert isinstance(target_b, cls)
+
+        obj = target_a.copy()
+        i = frame_index
+        j = target_b.key_frame_flags[i, 1]
+        while True:
+            i = j
+            j = target_b.key_frame_flags[i, 1]
+
+    
+        
+
+
+
+        
 
 
 # class TargetPoint(JsonTransBase, metaclass=LoggerMeta):

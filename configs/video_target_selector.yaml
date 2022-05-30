@@ -27,4 +27,6 @@ ScaleList: null
 
 AutoSaving: 10000 # 自动保存间隔的毫秒数 1秒 = 1000毫秒，如果设置为0或小于0的数则取消自动保存（手动保存模式需要手动按保存按键或退出的时候自动保存）
 
+# SaveLastState: false
+
 
