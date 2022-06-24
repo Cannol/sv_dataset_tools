@@ -76,3 +76,5 @@ VIDEO_TARGET_SELECTOR_FONT_FILE = file_exists(os.path.join(ROOT, 'STHeiti Light.
 
 KEY_MAP_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'keymap.yaml'))
 MOUSE_EVENT_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'mouse_events.yaml'))
+RESULTS_ANALYSIS_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'result_analysis.yaml'))
+TMP_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'tmp_config.yaml'))

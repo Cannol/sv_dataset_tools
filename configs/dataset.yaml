@@ -1,11 +1,11 @@
-DataRoot: /Users/cannol/Downloads
+DataRoot: '/data1/data_here'
 VideoList:
-#  - '01'
-#  - '02'
+  - '01'
+  - '02'
   - '03'
-#  - '04'
-#  - '05'
-#  - '06'
+  - '04'
+  - '05'
+  - '06'
 VideoName:
   - 'San Francisco, USA'
   - 'Delna, Libya'

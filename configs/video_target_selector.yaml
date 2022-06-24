@@ -1,9 +1,9 @@
-VideoFilePath: 'E:\ORSV_coll\part2\JL103B_MSS_20180125093015_200000760_101_001_L1B_MSS.avi'
+VideoFilePath: '/data1/ORSV_coll/part1/Beijing/JL103B_MSS_20170928110826_100002419_103_001_001_L1B_MSS.avi'
 ImageSequence: '.tiff'  # 如果上面的路径是视频文件，则该项无效
 SaveToDirectory: 'annotations'    # 标注数据将保存在该文件夹中annotations文件夹内，其他辅助数据将存放在此路径
 TargetFolderName: 'targets'   # 存放标注目标的文件夹
 
-SelectArea: [4000,4000,6000,5000]   # x,y, xx ,yy
+SelectArea: [0,0,6000,5000]   # x,y, xx ,yy
 AnnotatorWinHeight: 600
 AnnotatorWinWidth: 1200
 TargetClasses:

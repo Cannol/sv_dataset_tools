@@ -490,5 +490,15 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
             else:
                 return
 
+        elif key == ord('t'):
+            if self._selected_target and self._selected_flag >= 0:
+                # if self._tracker is None:
+                #     self._tracker = CVTracker(CVTracker.KCF)
+                # self._tracker.initialize(self._selected_target_poly)
+                print('initialize:', self._selected_target_poly)
+        elif key == ord('y'):
+            if self._selected_target:
+                print('track:')
+
         super()._key_map(key)
 
