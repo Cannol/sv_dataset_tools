@@ -457,8 +457,43 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
             i = j
             j = target_b.key_frame_flags[i, 1]
 
-    
-        
+
+def get_all_targets_max_range(path):
+    import math
+    target_files = [os.path.join(path, i) for i in os.listdir(path) if i.endswith('.meta')]
+    left = []
+    right = []
+    bottom = []
+    top = []
+    cls = {}
+    error = 0
+    for file in target_files:
+        try:
+            target = Target.MakeNewFromJsonFile(file)
+        except Exception as e:
+            print('ERROR--> %s' % file)
+            error += 1
+            continue
+
+        if cls.get(target.class_name, None) is None:
+            cls[target.class_name] = 1
+        else:
+            cls[target.class_name] += 1
+        polys = target.rect_poly_points[target.start_index: target.end_index+1]
+        points = polys.reshape((-1, 2))
+        right.append(float(np.max(points[:, 0])))
+        left.append(float(np.min(points[:, 0])))
+        bottom.append(float(np.max(points[:, 1])))
+        top.append(float(np.min(points[:, 1])))
+    print(path)
+    print('--> cls: {}'.format(cls))
+    print('--> Range: left {}, right {}, top {}, bottom{}'.format(math.floor(min(left)), math.ceil(max(right)),
+                                                                  math.floor(min(top)), math.ceil(max(bottom))))
+
+    return cls, error, math.floor(min(left)), math.ceil(max(right)), math.floor(min(top)), math.ceil(max(bottom))
+
+
+
 
 
 
