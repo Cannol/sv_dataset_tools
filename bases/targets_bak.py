@@ -1,5 +1,7 @@
+from typing import List
 import json
 
+import numpy
 import tqdm
 
 from common.json_helper import JsonTransBase
@@ -12,6 +14,47 @@ import time
 import numpy as np
 
 import datetime
+
+
+class PolygonMatrix(JsonTransBase, metaclass=LoggerMeta):
+
+    _L: Logger = None
+
+    def __init__(self, length):
+        self.length = length
+        self.polygons = [None] * length
+    
+    def to_dict(self, except_items=None):
+        polygons = []
+        for i, poly in enumerate(self.polygons):
+            polygons.append(poly.tolist())
+        return {
+            'polygons': polygons,
+            'length': self.length
+        }
+
+    def from_dict(self, obj_dict: dict):
+
+        self.length = obj_dict['length']
+
+        polygons = []
+        for poly in obj_dict['polygons']:
+            polygons.append(np.array(poly, dtype='float'))
+        return polygons
+
+    def create_from_rect(self, rect_polys):
+        for i, rect_poly in enumerate(rect_polys):
+            self.polygons[i] = rect_poly.copy()
+
+    def add_off_xy(self, x_off, y_off):
+        for poly in self.polygons:
+            poly += [x_off, y_off]
+
+    def __getitem__(self, item):
+        return self.polygons[item].copy()
+
+    def __len__(self):
+        return self.length
 
 
 class Target(JsonTransBase, metaclass=LoggerMeta):
@@ -40,12 +83,15 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     flag_dict_en = ['Normal', 'Invisible', 'Occlusion', 'Unknown']
     key_frame_flag_dict_en = ['Non-Key Frame', 'Key Frame', 'Unlabeled']
 
-    def to_dict(self):
+    def to_dict(self, except_items=None):
         self.start_index = int(self.start_index)
         self.end_index = int(self.end_index)
-        dict_all = super(Target, self).to_dict()
-        poly_global = self.rect_poly_points + [self._global_off_x, self._global_off_y]
-        dict_all['rect_poly_points'] = poly_global.tolist()
+        self.poly_points.add_off_xy(self._global_off_x, self._global_off_y)
+
+        dict_all = super(Target, self).to_dict(except_items=('rect_poly_points', 'state_flags', 'key_frame_flags'))
+
+        rect_poly_global = self.rect_poly_points + [self._global_off_x, self._global_off_y]
+        dict_all['rect_poly_points'] = rect_poly_global.tolist()
         dict_all['state_flags'] = self.state_flags.tolist()
         dict_all['key_frame_flags'] = self.key_frame_flags.tolist()
 
@@ -61,7 +107,12 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
 
     def from_dict(self, obj_dict):
         super(Target, self).from_dict(obj_dict)
+
+        if self.poly_points.polygons[0] is None:
+            self.poly_points.create_from_rect(self.rect_poly_points)
+
         self.rect_poly_points -= [self._global_off_x, self._global_off_y]
+        self.poly_points.add_off_xy(-self._global_off_x, -self._global_off_y)
 
     def remove_file(self):
         filename = os.path.join(self._default_path, '%s.meta' % self.name)
@@ -137,6 +188,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     @classmethod
     def SetLength(cls, length: int):
         cls._max_length = length
+        PolygonMatrix._max_length = length
 
     @classmethod
     def SaveAllTargets(cls):
@@ -198,6 +250,14 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
 
     def get_rect_poly(self, frame_index):
         if frame_index > self.end_index:
+            return False, self.rect_poly_points[self.end_index].copy(), self.poly_points[self.end_index]
+        elif frame_index < self.start_index:
+            return False, self.rect_poly_points[self.start_index].copy(), self.poly_points[self.start_index]
+        else:
+            return True, self.rect_poly_points[frame_index].copy(), self.poly_points[frame_index]
+
+    def get_rect(self, frame_index):
+        if frame_index > self.end_index:
             return False, self.rect_poly_points[self.end_index].copy()
         elif frame_index < self.start_index:
             return False, self.rect_poly_points[self.start_index].copy()
@@ -208,7 +268,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         if self.start_index == -1:
             return None
 
-        _, points = self.get_rect_poly(frame_index)
+        _, points = self.get_rect(frame_index)
 
         index_ = (left <= points[:, 0]) & (points[:, 0] <= right) & (top <= points[:, 1]) & (points[:, 1] <= bottom)
         # print(index_)
@@ -229,6 +289,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         self.end_index = -1
         self.state_flags = -np.ones(self._max_length, dtype='int')
         self.key_frame_flags = -np.ones((self._max_length, 3), dtype='int')  # (pre_index, next_index, -1 未知 1 关键帧 0 非关键帧)
+        self.poly_points = PolygonMatrix(self._max_length)
 
         self.__changed_flag = True
 
@@ -299,16 +360,16 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         # self.rect_poly_points += [self._global_off_x, self._global_off_y]
         self.Json = path if path else self.File
 
-    def set_key_point(self, frame_index, poly_points=None):
+    def set_key_point(self, frame_index, rect_poly_points=None, poly_points=None):
         key = self.key_frame_flags[frame_index, 2]
         if poly_points is None:
-            _, poly_points = self.get_rect_poly(frame_index)
+            _, rect_poly_points, poly_points = self.get_rect_poly(frame_index)
         if key == 1:
-            self._modify_key_point_at(frame_index, poly_points)
+            self._modify_key_point_at(frame_index, rect_poly_points, poly_points)
         elif key == 0:
-            self._add_key_point_between(frame_index, poly_points)
+            self._add_key_point_between(frame_index, rect_poly_points, poly_points)
         elif key == -1:
-            self._add_new_key_point(frame_index, poly_points)
+            self._add_new_key_point(frame_index, rect_poly_points, poly_points)
         self.__changed_flag = True
 
     def _add_key_point_between(self, frame_index, poly_points):
@@ -414,7 +475,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
                         t.save_file()
                         t.__changed_flag = False
                         t._L.info('Autosaved: %s' % t.name)
-                    except (IOError, TypeError) as e:
+                    except (IOError,TypeError) as e:
                         cls._L.error('Save target error: %s' % t.name)
                         cls._L.error(e)
             cls._working = False
@@ -457,239 +518,10 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
             i = j
             j = target_b.key_frame_flags[i, 1]
 
-    def get_route(self):
-        polys: np.ndarray = self.rect_poly_points[self.start_index: self.end_index+1]
-        center_points = np.average(polys, axis=1)
-        # print(center_points)
-        return center_points
 
-
-def get_all_targets_max_range(path):
-    import math
-    target_files = [os.path.join(path, i) for i in os.listdir(path) if i.endswith('.meta')]
-    left = []
-    right = []
-    bottom = []
-    top = []
-    cls = {}
-    error = 0
-    for file in target_files:
-        try:
-            target = Target.MakeNewFromJsonFile(file)
-        except Exception as e:
-            print('ERROR--> %s' % file)
-            error += 1
-            continue
-
-        if cls.get(target.class_name, None) is None:
-            cls[target.class_name] = 1
-        else:
-            cls[target.class_name] += 1
-        polys = target.rect_poly_points[target.start_index: target.end_index+1]
-        points = polys.reshape((-1, 2))
-        right.append(float(np.max(points[:, 0])))
-        left.append(float(np.min(points[:, 0])))
-        bottom.append(float(np.max(points[:, 1])))
-        top.append(float(np.min(points[:, 1])))
-    print(path)
-    print('--> cls: {}'.format(cls))
-    print('--> Range: left {}, right {}, top {}, bottom {}'.format(math.floor(min(left)), math.ceil(max(right)),
-                                                                   math.floor(min(top)), math.ceil(max(bottom))))
-
-    return cls, error, math.floor(min(left)), math.ceil(max(right)), math.floor(min(top)), math.ceil(max(bottom))
-
-
-
-
-
-
-        
-
-
-# class TargetPoint(JsonTransBase, metaclass=LoggerMeta):
-#     _L: Logger = None
-#
-#     targets_dict = {}
-#     _seed = ''
-#     _default_path = ''  # default_path
-#     _max_length = 0    # sequence length
-#
-#     # @classmethod
-#     # def NewTarget(cls, start_poly, class_name):
-#     #     t = cls()
-#     #     t.set_start_poly(start_poly)
-#     @classmethod
-#     def GetTargetsRange(cls, top, bottom, left, right):
-#         target_list = []
-#         for target in cls.targets_dict:
-#             t = cls.targets_dict[target]
-#             if t.is_in_the_range(top, bottom, left, right):
-#                 target_list.append(t)
-#         return target_list
-#
-#     @classmethod
-#     def GetAllTargets(cls, path):
-#         target_files = [os.path.join(path, i) for i in os.listdir(path) if i.endswith('.meta')]
-#         for file in target_files:
-#             t = Target.MakeNewFromJsonFile(file)
-#             name, _ = file.strip().split('.')
-#             cls.targets_dict[name] = t
-#
-#     @classmethod
-#     def SaveAllTargets(cls):
-#         for i, key, t in enumerate(cls.targets_dict.items()):
-#             t.save_file()
-#             cls._L.info('[%d/%d] Save target %s -> file: %s' % (i, len(cls.targets_dict), key, t.File))
-#
-#     def _rand_name_target(self):
-#         hash_ = hashlib.md5()
-#         hash_.update(('%s%.3f' % (self._seed, time.time())).encode('ascii'))
-#         return hash_.hexdigest()
-#
-#     @classmethod
-#     def SetDefaultSavingPath(cls, path):
-#         cls._default_path = path
-#
-#     @classmethod
-#     def SetTargetSeed(cls, new_seed_str):
-#         cls._seed = new_seed_str
-#
-#     @classmethod
-#     def SetLength(cls, length: int):
-#         cls._max_length = length
-#
-#     def __init__(self):
-#         assert self._max_length > 0, 'Please initialize sequence length by "Target.SetLength(max_length)"!'
-#         self.poly_points = np.zeros((1,), dtype='float')
-#         self.create_timestamp = time.time()
-#         self.class_name = ''
-#         self.rectangle = []
-#         self.positions = np.zeros((self._max_length, 2), dtype='float')
-#         self.name = self._rand_name_target()
-#         self.start_index = -1
-#         self.end_index = -1
-#         self.visible_flags = np.ones(self._max_length, dtype='bool')
-#         self.key_frame = -np.ones((self._max_length, 3), dtype='int')   # (pre_index, next_index, 1/0/-1)
-#
-#     @classmethod
-#     def New(cls, points, start_index, class_name):
-#         obj = cls()
-#         obj.set_start_poly(points, start_index)
-#         obj.class_name = class_name
-#         cls.targets_dict[obj.name] = obj
-#         cls._L.info('New target was created! [%s]' % obj.name)
-#         return obj
-#
-#     @property
-#     def File(self):
-#         return os.path.join(self._default_path, '%s.meta' % self.name)
-#
-#     def save_file(self, path=None):
-#         self.Json = path if path else self.File
-#
-#     def set_start_poly(self, points, start_index):
-#         self.poly_points = copy.deepcopy(points)
-#         self.start_index = start_index
-#         self.end_index = start_index
-#         self.rectangle = [np.max(points, axis=0).tolist(), np.max(points, axis=0).tolist()]
-#         self.positions[start_index, 0] = (self.rectangle[0][0] + self.rectangle[1][0])/2
-#         self.positions[start_index, 1] = (self.rectangle[0][1] + self.rectangle[1][1])/2
-#         self.key_frame[start_index, :] = [start_index, start_index, 1]
-#         if start_index > 0:
-#             self.visible_flags[:start_index-1] = False
-#
-#     def set_visible_at(self, frame_index, visible):
-#         self.visible_flags[frame_index] = visible
-#
-#     def set_key_point(self, frame_index, point):
-#         key = self.key_frame[frame_index, 2]
-#         if key == 1:
-#             self._modify_key_point_at(frame_index, point)
-#         elif key == 0:
-#             self._add_key_point_between(frame_index, point)
-#         elif key == -1:
-#             self._add_new_key_point(frame_index, point)
-#
-#     def _add_key_point_between(self, frame_index, point):
-#         # 在两个关键点之间添加新的关键点
-#         self.positions[frame_index, :] = point
-#         pre_, next_ = self.key_frame[frame_index, :2]
-#         self._calculate_frame_between(pre_, frame_index)
-#         self._calculate_frame_between(frame_index, next_)
-#         self.key_frame[frame_index, 2] = 1
-#         self.key_frame[pre_, 1] = frame_index
-#         self.key_frame[next_, 0] = frame_index
-#
-#     def _calculate_frame_between(self, start, end, update=True):
-#         k = end - start
-#         if k > 1:
-#             mini = (self.positions[end, :] - self.positions[start, :]) / k
-#             for i in range(start+1, end):
-#                 self.positions[i, :] = self.positions[i-1, :] + mini[:]
-#                 if update:
-#                     self.key_frame[i, :] = [start, end, 0]
-#
-#     def _add_new_key_point(self, frame_index, point):
-#         self.positions[frame_index, :] = point
-#         if frame_index > self.end_index:
-#             self.key_frame[frame_index, :] = [self.end_index, frame_index, 1]
-#             self.key_frame[self.end_index, 1] = frame_index
-#             self._calculate_frame_between(self.end_index, frame_index)
-#             self.visible_flags[self.end_index+1:frame_index+1] = True
-#             self.end_index = frame_index
-#         elif frame_index < self.start_index:
-#             self.key_frame[frame_index, :] = [frame_index, self.start_index, 1]
-#             self.key_frame[self.start_index, 0] = frame_index
-#             self._calculate_frame_between(frame_index, self.start_index)
-#             self.visible_flags[frame_index:self.start_index] = True
-#             self.start_index = frame_index
-#         else:
-#             assert False, 'Program logical error!'
-#
-#     def _modify_key_point_at(self, frame_index, point):
-#         self.positions[frame_index, :] = point
-#         pre_, next_ = self.key_frame[frame_index, :2]
-#         self._calculate_frame_between(pre_, frame_index, False)
-#         self._calculate_frame_between(frame_index, next_, False)
-#
-#     def _clear_frame_between(self, start, end):
-#         for i in range(start+1, end):
-#             self.positions[i, :] = [-1, -1]
-#             self.visible_flags[i] = False
-#             self.key_frame[i, :] = [-1, -1, -1]
-#
-#     def remove_key_point_at(self, frame_index):
-#         pre_, next_, key = self.key_frame[frame_index, :]
-#         if key == 0:
-#             return
-#         if pre_ == next_ == frame_index:
-#             self.positions[frame_index, :] = -1
-#             self.key_frame[frame_index, :] = -1
-#             self.visible_flags[frame_index] = False
-#             self.start_index = self.end_index = -1
-#
-#         if frame_index == pre_:
-#             self._clear_frame_between(self.start_index-1, next_)
-#             self.start_index = next_
-#             self.key_frame[self.start_index, 0] = self.start_index
-#         elif frame_index == next_:
-#             self._clear_frame_between(pre_, frame_index+1)
-#             self.end_index = pre_
-#             self.key_frame[self.end_index, 1] = self.end_index
-#         else:
-#             self._calculate_frame_between(pre_, next_)
-#
-#     def is_in_the_range(self, left, right, top, bottom):
-#         if self.start_index == -1:
-#             return None
-#
-#         index_ = (left <= self.positions[:, 0] <= right) & (top <= self.positions[:, 1] <= bottom)
-#         return True if np.sum(index_) > 0 else False
-#
-#     def get_points_range_from(self, left, right, top, bottom):
-#         if self.start_index == -1:
-#             return None
-#
-#         index_ = (left <= self.positions[:, 0] <= right) & (top <= self.positions[:, 1] <= bottom)
-#         i_index = np.argwhere(index_)
-#         return min(i_index), max(i_index)
+if __name__ == '__main__':
+    Target.SetLength(326)
+    # a = r'E:\projects\sv_dataset_tools\annotations\targets\out.meta'
+    a = r'E:\projects\sv_dataset_tools\annotations\targets\4a8175a0f5a517fcfe6f45befbdb6cfe.meta'
+    ttt = Target.MakeNewFromJsonFile(a)
+    ttt.Json = r'E:\projects\sv_dataset_tools\annotations\targets\out1.meta'

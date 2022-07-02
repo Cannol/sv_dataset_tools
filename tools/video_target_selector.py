@@ -389,10 +389,13 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
             raise FileExistsError(cls.VideoFilePath)
 
     @classmethod
-    def StartVideo(cls):
+    def StartVideo(cls, var_config=None):
         cls._L.info('Running Target Selector Version %s, Welcome!' % VERSION)
         cls.Load(VIDEO_TARGET_SELECTOR_CONFIG_FILE)
         cls._L.info('Loaded configuration file from: %s' % VIDEO_TARGET_SELECTOR_CONFIG_FILE)
+
+        if var_config is not None:
+            var_config()
 
         try:
             cls._L.info('Loading data...')

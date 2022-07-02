@@ -2,8 +2,8 @@ from bases.targets import Target
 from bases.targets import get_all_targets_max_range
 import os
 
-path = '/home/cannol/Desktop/标注结果'
-out_file = '/home/cannol/Desktop/out.csv'
+path = r'D:\Sanatar\Desktop\标注结果'
+out_file = r'D:\Sanatar\Desktop\out.csv'
 names = os.listdir(path)
 names.sort()
 Target.SetLength(1)
