@@ -11,6 +11,8 @@ from bases.key_mapper import KeyMapper
 
 from PIL import Image, ImageDraw
 
+import threading
+
 
 def _validation(img_list, skip=False):
     if len(img_list) < 1:
@@ -535,7 +537,115 @@ class WorkCanvas(CanvasBase):
             self._frame.reset_scale()
         elif key == ord('\\'):  # 用来改变图像质量
             self._frame.change_quality()
+        # elif key == ord('p'): # 测试进度条
+        #     self.progress_bar(self._test_progress_bar)
         self.refresh()
+
+    def _test_progress_bar(self, _pm):
+        import time
+
+        for i in range(100):
+            _pm.message = 'Processing... %d' % i
+            _pm.percentage = i * 0.01
+            print(_pm)
+            time.sleep(0.5)
+        _pm.message = 'Task finished!'
+        _pm.percentage = 1.0
+        time.sleep(2)
+
+    def progress_bar(self, func, **kwargs):
+
+        class PackMessage:
+            def __init__(self):
+                self.message = ''
+                self.percentage = 0.0
+
+            def __str__(self):
+                return 'message: %s, percentage: %.3f' % (self.message, self.percentage)
+
+        pm = PackMessage()
+
+        kwargs['_pm'] = pm
+
+        t = threading.Thread(name='background_task', target=func, daemon=True, kwargs=kwargs)
+
+        self.enable_mouse_event(False)
+        image = self._frame_show.copy()
+        h, w, c = image.shape
+        bar_height = 10
+        box_height = 60
+        start_x = 5
+        start_y_box = (h - box_height) // 2
+        start_y_bar = h // 2 + 5
+        text_percentage_width, _ = self.__font.getsize('000%')
+        start_percentage_x = w - text_percentage_width - start_x
+
+        cv2.rectangle(image, (0, start_y_box), (w, box_height + start_y_box), (125, 125, 125), -1)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        im = Image.fromarray(image)
+        draw = ImageDraw.Draw(im)
+        draw.text((start_x, start_y_box+0.25*box_height), '等待后台任务...', font=self.__font)
+        draw.rectangle((start_x, start_y_bar, start_percentage_x-2, start_y_bar+bar_height), fill=(0, 100, 200), outline=None)
+        draw.text((start_percentage_x, start_y_bar), '%d%%' % 0, font=self.__font)
+        frame = np.array(im)
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        self._quick_show(frame)
+        cv2.waitKey(2000)
+
+        t.start()
+        percentage = 0.0
+        message = '等待后台任务...'
+        while t.is_alive():
+            t.join(timeout=0.1)
+            if pm.message != message or min(pm.percentage, 1.0) != percentage:
+                message = pm.message
+                percentage = min(pm.percentage, 1.0)
+
+                im = Image.fromarray(image)
+                draw = ImageDraw.Draw(im)
+                draw.text((start_x, start_y_box + 0.25 * box_height), message, font=self.__font)
+                draw.rectangle((start_x, start_y_bar, start_percentage_x - 2, start_y_bar + bar_height), fill=(0, 100, 200),
+                               outline=None)
+                end_percentage_x = start_x + (start_percentage_x - 2 - start_x) * percentage
+                draw.rectangle((start_x, start_y_bar, end_percentage_x, start_y_bar + bar_height), fill=(100, 100, 0),
+                               outline=None)
+                draw.text((start_percentage_x, start_y_bar), '%d%%' % int(percentage*100), font=self.__font)
+                frame = np.array(im)
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                self._quick_show(frame)
+                cv2.waitKey(1)
+
+        self._quick_show(self._frame_show)
+        cv2.waitKey(1)
+        self.enable_mouse_event(True)
+
+    def message_box(self, message):
+        self.enable_mouse_event(False)
+
+        message += '(按任意键继续)'
+
+        bar_height = 50.0
+        image = self._frame_show.copy()
+        h, w, c = image.shape
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        im = Image.fromarray(image)
+        draw = ImageDraw.Draw(im)
+        y_start = (h - bar_height) / 2
+        draw.rectangle((0, y_start, w, y_start + bar_height), outline=None, fill=(125, 125, 125), width=1)
+
+        width, height = self.__font.getsize(message)
+
+        draw.text(((w - width) / 2, y_start + bar_height / 2 - height / 2), message, font=self.__font)
+
+        frame = np.array(im)
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+        self._quick_show(frame)
+
+        cv2.waitKey(0)
+        self.enable_mouse_event(True)
+        self._quick_show(self._frame_show)
+        return True
 
     def ask_message(self, message, ok_key=None, ok_key_name=None, cancel_key=None, cancel_key_name=None):
 
@@ -556,11 +666,11 @@ class WorkCanvas(CanvasBase):
         im = Image.fromarray(image)
         draw = ImageDraw.Draw(im)
         y_start = (h - bar_height)/2
-        draw.rectangle([0, y_start, w, y_start+bar_height], outline=None, fill=(125, 125, 125), width=1)
+        draw.rectangle((0, y_start, w, y_start+bar_height), outline=None, fill=(125, 125, 125), width=1)
 
         width, height = self.__font.getsize(message)
 
-        draw.text([(w-width)/2, y_start+bar_height/2-height/2], message, font=self.__font)
+        draw.text(((w-width)/2, y_start+bar_height/2-height/2), message, font=self.__font)
 
         frame = np.array(im)
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
