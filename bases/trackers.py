@@ -16,7 +16,7 @@ class CVTracker(object):
 
     tracker_types = ['BOOSTING', 'MIL', 'KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
 
-    def __init__(self, _type: int):
+    def __init__(self, _type: int, frame: MiniFrame):
         assert 0 <= _type < len(self.tracker_types)
 
         tracker_type = self.tracker_types[_type]
@@ -42,6 +42,7 @@ class CVTracker(object):
                 tracker = cv2.TrackerCSRT_create()
         self._tracker = tracker
         self._tracker_type = tracker_type
+        self._frame = frame
 
     def initialize(self, bbox, frame):
         self._tracker.init(frame, bbox)

@@ -39,145 +39,6 @@ def _validation(img_list, skip=False):
     return img_demo.shape
 
 
-class Frame(object):
-
-    def __init__(self, image_list, width_out, height_out, start_scale=1.0, zoom_scale: list = None):
-        self._lst = image_list
-        self._length = len(image_list)
-
-        if zoom_scale is None:
-            self.zoom_scale = [i*0.1 for i in range(1, 101)]
-        else:
-            self.zoom_scale = zoom_scale
-
-        # set initial parameters
-        self._scale = start_scale
-        self._scale_index = self.zoom_scale.index(start_scale)
-        self._start_scale = self._scale_index
-        self._off_x = 0
-        self._off_y = 0
-        self._frame_index = -1
-
-        # validation
-        self._IMAGE_HEIGHT, self._IMAGE_WIDTH, self._IMAGE_CHANNEL = _validation(self._lst, True)
-        self._image_height, self._image_width = self._IMAGE_HEIGHT, self._IMAGE_WIDTH
-        self._width_out = min(width_out, self._IMAGE_WIDTH)
-        self._height_out = min(height_out, self._IMAGE_HEIGHT)
-
-        # prepare data
-        self._frame_curr = None   # 当前的原始帧
-        self._frame_out = None    # 经过缩放后的帧
-        self._frame = None         # 实际要输出的帧
-
-        self.set_frame(0)
-
-    @property
-    def range_rectangle_global(self):
-        return self._off_x / self.scale, self._off_y / self.scale, \
-               (self._off_x + self._width_out) / self.scale, (self._off_y + self._height_out) / self.scale
-
-    def get_global_location(self, x, y):
-        return (x + self._off_x) / self.scale, (y + self._off_y) / self.scale
-
-    @property
-    def off_x(self):
-        return self._off_x
-
-    @property
-    def off_y(self):
-        return self._off_y
-
-    @property
-    def frame_out_size(self):
-        return self._width_out, self._height_out
-
-    @property
-    def frame_index(self):
-        return self._frame_index
-
-    @property
-    def frame(self):
-        """
-        获取当前帧的副本
-        :return:
-        """
-        return self._frame.copy()
-
-    def _crop(self, off: Tuple = None):
-        if off is not None:
-            _off_x = min(max(off[0], 0), self._image_width - self._width_out)
-            _off_y = min(max(off[1], 0), self._image_height - self._height_out)
-
-            if self._off_x == _off_x and self._off_y == _off_y:
-                return
-            self._off_y = _off_y
-            self._off_x = _off_x
-        self._frame = self._frame_out[self._off_y: self._off_y + self._height_out,
-                                      self._off_x: self._off_x + self._width_out]
-
-    def move_delta(self, delta_x, delta_y):
-        self._crop((self._off_x + delta_x, self._off_y + delta_y))
-
-    def set_offset(self, x, y):
-        self._crop((x, y))
-
-    def set_frame(self, index):
-        if index != self._frame_index:
-            index %= self._length
-            self._frame_curr = cv2.imread(self._lst[index])
-            self._frame_index = index
-            self._zoom(self._scale)
-            self._crop()
-
-    def __len__(self):
-        return self._length
-
-    def previous_frame(self, n=1):
-        self.set_frame(self._frame_index - n)
-
-    def next_frame(self, n=1):
-        self.set_frame(self._frame_index + n)
-
-    def zoom_in(self, x, y):
-        self.zoom_from_point(x, y, 1)
-
-    def zoom_out(self, x, y):
-        self.zoom_from_point(x, y, -1)
-
-    def zoom_from_point(self, x, y, index_add):
-        self._scale_index = min(max(0, self._scale_index + index_add), len(self.zoom_scale))
-        scale_ori = self.scale
-        self._zoom(self.zoom_scale[self._scale_index])
-        off_x = int(self.scale * (self._off_x + x) / scale_ori - x)
-        off_y = int(self.scale * (self._off_y + y) / scale_ori - y)
-        self._crop((off_x, off_y))
-
-    def reset_scale(self):
-        self._zoom(self.zoom_scale[self._start_scale])
-
-    def _zoom(self, scale_factor):
-        if scale_factor == 1.0:
-            self._scale = 1.0
-            self._frame_out = self._frame_curr.copy()
-            self._image_height, self._image_width, _ = self._frame_out.shape
-            return
-
-        self._scale = scale_factor
-        frame_out = cv2.resize(self._frame_curr, None, fx=scale_factor, fy=scale_factor,
-                               interpolation=cv2.INTER_LANCZOS4)
-        h, w, _ = frame_out.shape
-        if self._width_out > w or self._height_out > h:
-            self._scale_index += 1
-            return
-
-        self._frame_out = frame_out
-        self._image_height, self._image_width, _ = frame_out.shape
-
-    @property
-    def scale(self):
-        return self._scale
-
-
 class AdvancedFrame(metaclass=LoggerMeta):
 
     _L: Logger = None
@@ -466,6 +327,25 @@ class AdvancedFrame(metaclass=LoggerMeta):
         self._scale_index = self.__start_scale_index
         scale = self.zoom_scales[self._scale_index]
         self.zoom_from_center(scale)
+
+    def generate_mini_frame_object(self):
+        obj = MiniFrame
+
+class MiniFrame(object):
+    def __init__(self, image_list, frame_obj):
+        self._lst = image_list
+        self._cur_frame = 0
+        self._scale = 1.0
+
+    def set_scale(self, scale):
+        if self._scale == scale:
+            return
+        self._scale = max(0.1, scale)
+
+    def __getitem__(self, item):
+        frame_index, crop_x, crop_y, crop_xx, crop_yy = item
+        image = cv2.imread(self._lst[frame_index])
+        return image[crop_x: crop_xx, crop_y: crop_yy, :]
 
 
 class CanvasBase(metaclass=LoggerMeta):
