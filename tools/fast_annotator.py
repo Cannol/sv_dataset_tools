@@ -390,8 +390,8 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
 
                 left, top, _, _ = self._frame.range_rectangle_global
                 indexes = list(range(start, end+1))
-                print(indexes)
-                print(now_index)
+                # print(indexes)
+                # print(now_index)
                 indexes.remove(now_index)
 
                 if len(indexes) > 0:
@@ -519,7 +519,10 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
             target_class = 'Class: %s' % self._selected_target.class_name
             cv2.putText(frame_image, target_class, (20, 95), 0, 0.5, (255, 255, 255), 1, lineType=cv2.LINE_AA)
         else:
-            static_text = 'Labeled Targets: %d' % len(Target.targets_dict)
+            static_text = 'Labeled Targets: %d [Global: %d, RoI: %d]' \
+                          % (len(Target.targets_dict),
+                             len(Target.targets_dict)+Target.total_num_add,
+                             len(self.__targets_insight))
             cv2.putText(frame_image, static_text, (20, 45), 0, 0.5, (255, 255, 255), 1, lineType=cv2.LINE_AA)
 
         return frame_image
@@ -548,6 +551,7 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                 self._L.info('[自动跟踪] 目标%s，成功更新帧: %d ~ %d'
                              % (result.target_id, result.indexes[0]+1, result.indexes[-1]+1))
             target.freeze = ''
+            self.refresh()
         else:
             self._L.info('[自动跟踪] 由于目标%s已被移除，自动跟踪结果无效丢弃！' % result.target_id)
 
@@ -658,17 +662,20 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                         self._merge_mode = False
                 else:
                     self.message_box('缺少被合并的另一个目标，请选择被合并的目标后再按回车确认。')
-
-            if self._selected_target and self._selected_flag < 1:
-                self._selected_target.set_key_point(self._frame.frame_index)
-
-            if self._selected_target and self._selected_flag == 2:
-                self._selected_target.set_key_point(self._frame.frame_index)
+            else:
+                if self._selected_target and self._selected_flag in [-1, 0, 2]:
+                    if self._selected_target.freeze:
+                        self.message_box('目标正在被AI跟踪，请不要修改！')
+                    else:
+                        self._selected_target.set_key_point(self._frame.frame_index)
 
         elif key == KeyMapper.BACK_SPACE:  # backspace
             if self._selected_target:
-                self._selected_target.remove_key_point_at(self._frame.frame_index)
-        elif key == KeyMapper.DEL:
+                if self._selected_target.freeze:
+                    self.message_box('目标正处于AI跟踪中，请勿修改此目标！')
+                else:
+                    self._selected_target.remove_key_point_at(self._frame.frame_index)
+        elif key == KeyMapper.DEL or key == ord('-'):
             if self._selected_target:
                 target = self._selected_target
                 while True:
@@ -716,7 +723,9 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
             self._set_state_flag(Target.OCC)
 
         elif key == ord('`'):
-            Target.SaveAllTargets()
+            res = self.progress_bar(Target.SaveAllTargets)
+            # res = Target.SaveAllTargets()
+            self.message_box('保存完毕，新保存目标%d个，错误%d个，跳过被冻结目标%d个！' % (res[0], res[2], res[3]))
 
         elif key == ord('i'):
             if self._selected_target:
@@ -729,14 +738,18 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
 
         elif key == ord('o'):
             if self._selected_target and self._selected_flag >= 0:
-                if self.ask_message('确定要删除此目标往前（不包括当前帧）的所有帧吗？'):
+                if self._selected_target.freeze:
+                    self.message_box('目标正在被AI跟踪，请不要修改！')
+                elif self.ask_message('确定要删除此目标往前（不包括当前帧）的所有帧吗？'):
                     self._selected_target.remove_before_frame(self._frame.frame_index)
             else:
                 return
 
         elif key == ord('p'):
             if self._selected_target and self._selected_flag >= 0:
-                if self.ask_message('确定要删除此目标往后（不包括当前帧）的所有帧吗？'):
+                if self._selected_target.freeze:
+                    self.message_box('目标正在被AI跟踪，请不要修改！')
+                elif self.ask_message('确定要删除此目标往后（不包括当前帧）的所有帧吗？'):
                     self._selected_target.remove_after_frame(self._frame.frame_index)
             else:
                 return
@@ -746,9 +759,12 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                 self.message_box('您已经处于合并目标状态下！')
                 return
             if self._selected_target:
-                self._selected_target_to_merge = None
-                self._selected_target_to_merge_poly = None
-                self._merge_mode = True
+                if self._selected_target.freeze:
+                    self.message_box('目标正在被AI跟踪，请不要修改！')
+                else:
+                    self._selected_target_to_merge = None
+                    self._selected_target_to_merge_poly = None
+                    self._merge_mode = True
             else:
                 self.message_box('抱歉！您没有选中任何目标，无法开始目标合并。请先选择一个起始目标再按此按键！')
                 return
@@ -769,6 +785,15 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                     return
             else:
                 return
+        elif key == ord('k'):
+            if self._selected_target:
+                if self._selected_target.freeze:
+                    self.message_box('目标正在被AI跟踪，请不要修改！')
+                else:
+                    if self._selected_flag == 2:
+                        self._selected_target.delete_auto_frames_at(self._frame.frame_index)
+                    else:
+                        self.message_box('当前帧不是AI帧，无法清楚该段自动跟踪的结果！')
 
         super()._key_map(key)
 

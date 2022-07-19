@@ -3,8 +3,8 @@ ImageSequence: '.tiff'  # 如果上面的路径是视频文件，则该项无效
 SaveToDirectory: 'D:\Sanatar\Desktop\标注结果\021_杨晓岩'    # 标注数据将保存在该文件夹中annotations文件夹内，其他辅助数据将存放在此路径
 TargetFolderName: 'targets'   # 存放标注目标的文件夹
 
-SelectArea: [5160,1998,7001,2989]   # x,y, xx ,yy
-AnnotatorWinHeight: 1000
+SelectArea: [5160,1998,7160,3998]   # x,y, xx ,yy
+AnnotatorWinHeight: 900
 AnnotatorWinWidth: 1280
 TargetClasses:
   - ['vehicle', [255, 0, 0]]
@@ -26,7 +26,7 @@ StartScale: 1.0
 ScaleList: null
 
 AutoSaving: 10000 # 自动保存间隔的毫秒数 1秒 = 1000毫秒，如果设置为0或小于0的数则取消自动保存（手动保存模式需要手动按保存按键或退出的时候自动保存）
-
+MaxCacheMemory: 500  # 主程序的最大缓存，单位MB
 # SaveLastState: false
 
 

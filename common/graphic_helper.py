@@ -68,7 +68,7 @@ def merge2routes(bbox_route1, bbox_route2, theta1, theta2):
     elif theta2 == 0:
         return bbox_route1
 
-    print(theta1, theta2)
+    # print(theta1, theta2)
 
     length = len(bbox_route1)
     weights = np.linspace(0, 1, length)

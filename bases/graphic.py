@@ -47,6 +47,31 @@ class AdvancedFrame(metaclass=LoggerMeta):
 
     _L: Logger = None
 
+    def reset_outsize(self, width_out, height_out):
+        self._OUT_WIDTH = min(width_out, self._IMAGE_WIDTH)
+        self._OUT_HEIGHT = min(height_out, self._IMAGE_HEIGHT)
+        self._ADV_IMAGE_SIZE_WIDTH = width_out * 3
+        self._ADV_IMAGE_SIZE_HEIGHT = height_out * 3
+
+        start_scale = self.zoom_scales[self.__start_scale_index]
+
+        min_scale_factor = max(self._OUT_WIDTH / self._IMAGE_WIDTH, self._OUT_HEIGHT / self._IMAGE_HEIGHT) - 0.001
+        self.zoom_scales = [i * 0.1 for i in range(1, 9) if i * 0.1 > min_scale_factor]
+        self.zoom_scales += [i * 1.0 for i in range(1, 11) if i * 1.0 > min_scale_factor]
+
+        if 1.0 not in self.zoom_scales:
+            self.zoom_scales += [1.0]
+            self.zoom_scales.sort()
+
+        if start_scale not in self.zoom_scales:
+            self.zoom_scales += [start_scale]
+            self.zoom_scales.sort()
+
+        self._scale = start_scale
+        self._scale_index = self.zoom_scales.index(start_scale)
+        self.__start_scale_index = self._scale_index
+        self.set_frame(self.frame_index, force=True)
+
     def __init__(self, image_list, width_out, height_out, start_scale=1.0, zoom_scales: list = None, max_cache=500):
 
         self._lst = image_list
@@ -100,6 +125,7 @@ class AdvancedFrame(metaclass=LoggerMeta):
         self._scale = start_scale
         self._scale_index = self.zoom_scales.index(start_scale)
         self.__start_scale_index = self._scale_index
+
         self._original_image = None
         self._image_crop = None
         self._frame_curr = None    # 从原始图像crop后resize过的帧图像
@@ -158,8 +184,8 @@ class AdvancedFrame(metaclass=LoggerMeta):
     def valid_frame_index(self, index):
         return max(min(index, self._length-1), 0)
 
-    def set_frame(self, index):
-        if index != self._frame_index:
+    def set_frame(self, index, force=False):
+        if force or index != self._frame_index:
             index %= self._length
             # self._original_image = cv2.imread(self._lst[index])
             self._original_image = self._reader[index]
@@ -351,6 +377,7 @@ class CanvasBase(metaclass=LoggerMeta):
         self._stop_mouse_event = False
         self.__need_refresh = True
         self.__win_title = win_name
+        self.__full_screen = False
 
     def enable_mouse_event(self, enable=True):
         self._stop_mouse_event = not enable
@@ -401,11 +428,28 @@ class CanvasBase(metaclass=LoggerMeta):
     def _quick_show(self, frame):
         cv2.imshow(self.win_name, frame)
 
+    def _set_full_screen(self):
+        if self.__full_screen:
+            cv2.destroyWindow(self.__win_name)
+            cv2.namedWindow(self.__win_name, cv2.WINDOW_GUI_NORMAL | cv2.WINDOW_AUTOSIZE)
+            cv2.setMouseCallback(self.__win_name, self.__mouse_event)
+            self.__full_screen = False
+            return None
+        else:
+            cv2.destroyWindow(self.__win_name)
+            cv2.namedWindow(self.__win_name, cv2.WINDOW_NORMAL)
+            cv2.setWindowProperty(self.__win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+            _, _, width, height = cv2.getWindowImageRect(self.__win_name)
+            cv2.setMouseCallback(self.__win_name, self.__mouse_event)
+            self.__full_screen = True
+            return width, height
+
     def run(self, window_location=None):
         try:
             cv2.getWindowImageRect(self.__win_name)
         except cv2.error:
             cv2.namedWindow(self.__win_name, cv2.WINDOW_GUI_NORMAL | cv2.WINDOW_AUTOSIZE)
+            # cv2.namedWindow(self.__win_name, cv2.WINDOW_NORMAL)
         if window_location is not None:
             assert isinstance(window_location, (List, Tuple)) and len(window_location) == 2, \
                 'Window location must be a List or a Tuple with two values -> (x, y).'
@@ -444,6 +488,7 @@ class PackMessage:
     def __init__(self):
         self.message = ''
         self.percentage = 0.0
+        self.return_value = None
 
     def __str__(self):
         return 'message: %s, percentage: %.3f' % (self.message, self.percentage)
@@ -463,8 +508,12 @@ class WorkCanvas(CanvasBase):
         self.__drag_start_x = 0
         self.__drag_start_y = 0
 
+        self._ori_height = -1
+        self._ori_width = -1
+
     def set_frame_obj(self, frame: AdvancedFrame):
         self._frame = frame
+        self._ori_width, self._ori_height = self._frame.frame_out_size
 
     def _refresh(self):
         # return super()._refresh()
@@ -534,6 +583,13 @@ class WorkCanvas(CanvasBase):
             self._frame.reset_scale()
         elif key == ord('\\'):  # 用来改变图像质量
             self._frame.change_quality()
+        elif key == ord('l'):
+            re = self._set_full_screen()
+            if re is None:
+                self._frame.reset_outsize(width_out=self._ori_width, height_out=self._ori_height)
+            else:
+                self._frame.reset_outsize(width_out=re[0], height_out=re[1])
+
         # elif key == ord('p'): # 测试进度条
         #     self.progress_bar(self._test_progress_bar)
         self.refresh()
@@ -554,9 +610,9 @@ class WorkCanvas(CanvasBase):
 
         pm = PackMessage()
 
-        kwargs['_pm'] = pm
+        # kwargs['_pm'] = pm
 
-        t = threading.Thread(name='background_task', target=func, daemon=True, kwargs=kwargs)
+        t = threading.Thread(name='background_task', target=func, daemon=True, args=(pm, ), kwargs=kwargs)
 
         self.enable_mouse_event(False)
         image = self._frame_show.copy()
@@ -579,7 +635,7 @@ class WorkCanvas(CanvasBase):
         frame = np.array(im)
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         self._quick_show(frame)
-        cv2.waitKey(2000)
+        cv2.waitKey(2)
 
         t.start()
         percentage = 0.0
@@ -607,6 +663,7 @@ class WorkCanvas(CanvasBase):
         self._quick_show(self._frame_show)
         cv2.waitKey(1)
         self.enable_mouse_event(True)
+        return pm.return_value
 
     def message_box(self, message):
         self.enable_mouse_event(False)

@@ -107,6 +107,7 @@ class TrackerRunner(YamlConfigClassBase, Process):
             if cls._recv_thread is not None:
                 cls._finished_queue.put(None)
                 cls._recv_thread.join()
+                cls._recv_thread = None
             return
 
         if cls._recv_thread is not None:

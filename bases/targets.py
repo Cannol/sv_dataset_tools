@@ -140,10 +140,12 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         cls._max_length = length
 
     @classmethod
-    def SaveAllTargets(cls):
+    def SaveAllTargets(cls, pm=None):
         save_n = 0
         err_n = 0
         time_out = 0
+        freeze = 0
+        unchanged = 0
         while cls._working:
             time.sleep(1000)
             time_out += 1
@@ -153,21 +155,40 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
                 cls._pause = False
                 cls._L.error('Waiting auto thread time out, saving all targets in force manner.')
                 break
-        cls._L.pause = True
+        cls._pause = True
         for i, (key, t) in enumerate(cls.targets_dict.items()):
+            if pm:
+                pm.percentage = i / len(cls.targets_dict)
             try:
                 if t.__changed_flag:
-                    t.save_file()
-                    cls._L.info('[%d/%d] Save changed target %s -> file: %s' % (i+1, len(cls.targets_dict), key, t.File))
-                    save_n += 1
+                    if t.freeze:
+                        cls._L.debug('Skipped freeze target: %s' % t.File)
+                        freeze += 1
+                        unchanged += 1
+                    else:
+                        t.save_file()
+                        t.__changed_flag = False
+                        cls._L.info('[%d/%d] Save changed target %s -> file: %s' % (i+1, len(cls.targets_dict), key, t.File))
+                        save_n += 1
                 else:
                     cls._L.debug('Skipped unchanged target: %s' % t.File)
+                    unchanged += 1
             except (TypeError, IOError) as e:
                 cls._L.error('Save target error: %s' % t.name)
                 cls._L.error(e)
                 err_n += 1
-        cls._L.info('|= Save All Summary ==> Saved Target: %d, Total: %d, Error Saved: %d' % (save_n, len(cls.targets_dict), err_n))
+                unchanged += 1
+            if pm:
+                pm.message = '已新保存目标: %d, 无变化被跳过目标： %d (其中包括 - 被冻结：%d个 | 保存出错: %d个)，总计处理: %d个目标' \
+                             % (save_n, unchanged, freeze, err_n, len(cls.targets_dict))
+
+        cls._L.info('|= Save All Summary ==> Saved Target: %d, Total: %d, Unchanged: %d (including freeze: %d, Error: %d)'
+                    % (save_n, len(cls.targets_dict), unchanged, freeze, err_n))
         cls._pause = False
+        if pm:
+            pm.return_value = (save_n, unchanged, freeze, err_n, len(cls.targets_dict))
+        else:
+            return save_n, unchanged, freeze, err_n, len(cls.targets_dict)
 
     def change_target_class(self, new_class_name):
         if self.class_name != new_class_name:
@@ -323,6 +344,11 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
             if key == 1:
                 return
             _, poly_points = self.get_rect_poly(frame_index)
+            if key == 2:
+                self._add_key_point_between(frame_index, poly_points)
+                if refresh:
+                    self.__changed_flag = True
+                return
 
         if key == 1:
             self._modify_key_point_at(frame_index, poly_points)
@@ -332,7 +358,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
             self._add_new_key_point(frame_index, poly_points)
         elif key == 2:
             # 自动帧则无需修改周边帧
-            self._modify_key_point_at(frame_index, poly_points, with_side=False)
+            self._modify_key_point_at(frame_index, poly_points, False)
         if refresh:
             self.__changed_flag = True
 
@@ -362,11 +388,11 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     def _calculate_frame_between(self, start, end, update=True):
         k = end - start
         if k > 1:
-            if self.key_frame_flags[start+1, 2] == 2:
+            if self.key_frame_flags[start+1, 2] == 2 or self.key_frame_flags[end-1, 2] == 2:
                 # 随便测试其中一帧的flag 如果是自动帧 则不修改
                 if update:
                     for i in range(start + 1, end):
-                        self.key_frame_flags[i, :] = [start, end, 0]
+                        self.key_frame_flags[i, :] = [start, end, 2]
             else:
                 mini = (self.rect_poly_points[end, :] - self.rect_poly_points[start, :]) / k
                 for i in range(start+1, end):
@@ -415,6 +441,16 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         self.rect_poly_points[start:end, :, :] = -1.0
         self.state_flags[start:end] = -1
         self.key_frame_flags[start:end, :] = [-1, -1, -1]
+
+    def delete_auto_frames_at(self, frame_index):
+        pre_, next_, key = self.key_frame_flags[frame_index]
+        if key == 2:
+            self._clear_auto_frames_between(pre_, next_)
+            self.__changed_flag = True
+
+    def _clear_auto_frames_between(self, start, end):
+        self.key_frame_flags[start+1: end, 2] = 0
+        self._calculate_frame_between(start, end)
 
     def remove_key_point_at(self, frame_index):
         pre_, next_, key = self.key_frame_flags[frame_index, :]

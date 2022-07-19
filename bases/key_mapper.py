@@ -73,6 +73,7 @@ class KeyDescriptor(object):
 
     TAB = [u'Tab 按键', u'制表按键位于键盘左侧第一列，Q左边']
     SHIFT_TAB = [u'Shift + Tab 组合键', u'先按住Shift按键，再按一下Tab按键']
+    F12 = [u'F12 功能键', u'按键盘上方功能键区域的F12']
 
 
 class KeyMapper(YamlConfigClassBase):
@@ -97,6 +98,7 @@ class KeyMapper(YamlConfigClassBase):
 
     SHIFT = 0
     ALT = 0
+    F12 = 0
 
 
 def start_key_test():
@@ -149,6 +151,7 @@ def start_key_test():
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
             cv2.imshow('test', image)
             key = cv2.waitKey(0)
+            print(key)
 
             if index > 1:
                 while key == cls.SHIFT or key == cls.ALT:

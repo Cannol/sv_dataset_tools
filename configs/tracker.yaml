@@ -1,5 +1,5 @@
-MaxQueue: 100
-CacheSize: 1000   # MB
-NumTrackers: 1
-ShowTrackingSteps: false
+MaxQueue: 100  # 同时接受任务个数
+CacheSize: 1000   # 每个跟踪器的最大缓存，单位是MB
+NumTrackers: 1   # 跟踪器的数量
+ShowTrackingSteps: false   # 是否显示跟踪过程
 ShowWaitTime: 500  # 毫秒

@@ -59,6 +59,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
 
     TargetFolderName: str = 'targets'
     AutoSaving: int = 10000
+    MaxCacheMemory: int = 500
 
     # SaveLastState: bool = False
 
@@ -137,7 +138,8 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
                        width_out=self.AnnotatorWinWidth,
                        height_out=self.AnnotatorWinHeight,
                        start_scale=self.StartScale,
-                       zoom_scales=self.ScaleList
+                       zoom_scales=self.ScaleList,
+                       max_cache=self.MaxCacheMemory
                        )
         annotator = Annotator('annotation', font=self.font1, font_height=self.font1_height, classes=self.TargetClasses)
         annotator.set_frame_obj(frames)
