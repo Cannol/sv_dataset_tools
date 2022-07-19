@@ -13,6 +13,8 @@ from PIL import Image, ImageDraw
 
 import threading
 
+from bases.images_reader import ImageSeqReader
+
 
 def _validation(img_list, skip=False):
     if len(img_list) < 1:
@@ -45,9 +47,10 @@ class AdvancedFrame(metaclass=LoggerMeta):
 
     _L: Logger = None
 
-    def __init__(self, image_list, width_out, height_out, start_scale=1.0, zoom_scales: list = None):
+    def __init__(self, image_list, width_out, height_out, start_scale=1.0, zoom_scales: list = None, max_cache=500):
 
         self._lst = image_list
+        self._reader = ImageSeqReader(image_list, max_cache)
         self._IMAGE_HEIGHT, self._IMAGE_WIDTH, self._IMAGE_CHANNEL = _validation(self._lst, True)
         self._length = len(self._lst)
 
@@ -110,7 +113,7 @@ class AdvancedFrame(metaclass=LoggerMeta):
             value = getattr(cv2, name, None)
             if value is None:
                 self.image_quality_names.pop(i)
-                self._L.debug('Removed unsupported method: %s' % name)
+                self._L.info('Removed unsupported method: %s' % name)
             else:
                 self.image_qualities.insert(0, value)
 
@@ -152,10 +155,14 @@ class AdvancedFrame(metaclass=LoggerMeta):
     def get_global_location(self, x, y):
         return (x + self._off_x) / self.scale, (y + self._off_y) / self.scale
 
+    def valid_frame_index(self, index):
+        return max(min(index, self._length-1), 0)
+
     def set_frame(self, index):
         if index != self._frame_index:
             index %= self._length
-            self._original_image = cv2.imread(self._lst[index])
+            # self._original_image = cv2.imread(self._lst[index])
+            self._original_image = self._reader[index]
             self._frame_index = index
             self._crop_zoom_original(self._off_x, self._off_y, self._scale)
 
@@ -330,25 +337,6 @@ class AdvancedFrame(metaclass=LoggerMeta):
         scale = self.zoom_scales[self._scale_index]
         self.zoom_from_center(scale)
 
-    def generate_mini_frame_object(self):
-        obj = MiniFrame
-
-class MiniFrame(object):
-    def __init__(self, image_list, frame_obj):
-        self._lst = image_list
-        self._cur_frame = 0
-        self._scale = 1.0
-
-    def set_scale(self, scale):
-        if self._scale == scale:
-            return
-        self._scale = max(0.1, scale)
-
-    def __getitem__(self, item):
-        frame_index, crop_x, crop_y, crop_xx, crop_yy = item
-        image = cv2.imread(self._lst[frame_index])
-        return image[crop_x: crop_xx, crop_y: crop_yy, :]
-
 
 class CanvasBase(metaclass=LoggerMeta):
     _L: Logger = None
@@ -450,6 +438,15 @@ def print_events():
     for dd in d:
         if dd.startswith('EVENT_'):
             print("{}: {}".format(dd, d[dd]))
+
+
+class PackMessage:
+    def __init__(self):
+        self.message = ''
+        self.percentage = 0.0
+
+    def __str__(self):
+        return 'message: %s, percentage: %.3f' % (self.message, self.percentage)
 
 
 class WorkCanvas(CanvasBase):
@@ -554,14 +551,6 @@ class WorkCanvas(CanvasBase):
         time.sleep(2)
 
     def progress_bar(self, func, **kwargs):
-
-        class PackMessage:
-            def __init__(self):
-                self.message = ''
-                self.percentage = 0.0
-
-            def __str__(self):
-                return 'message: %s, percentage: %.3f' % (self.message, self.percentage)
 
         pm = PackMessage()
 
@@ -679,11 +668,11 @@ class WorkCanvas(CanvasBase):
 
         while True:
             key = cv2.waitKey(0)
-            if key == ok_key: # enter
+            if key == ok_key:  # enter-2 1 13 -4 5
                 self.enable_mouse_event(True)
                 self._quick_show(self._frame_show)
                 return True
-            elif key == cancel_key: # esc
+            elif key == cancel_key:  # esc
                 self.enable_mouse_event(True)
                 self._quick_show(self._frame_show)
                 return False
@@ -699,15 +688,6 @@ class WorkCanvas(CanvasBase):
         while not self.quit_panel():
             self._quick_show(self._frame_show)
             super(WorkCanvas, self).run()
-
-
-class StateShow(CanvasBase):
-
-    def __init__(self, win_name, font, font_height):
-        super().__init__(win_name)
-
-    def _mouse_event(self, key, x, y, flag, params):
-        print(x,y,flag,key)
 
 
 if __name__ == '__main__':

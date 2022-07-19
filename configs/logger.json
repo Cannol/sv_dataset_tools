@@ -7,7 +7,7 @@
     "allow_abstract": false
   },
   "default": {
-    "log_level": "debug",
+    "log_level": "info",
     "format": "%(asctime)s:%(msecs)03d %(name)s[%(process)d][%(filename)s:%(lineno)d] %(levelname)s %(message)s",
     "format_file": "%(asctime)s %(name)s[%(process)d][%(filename)s:%(lineno)d] %(levelname)s %(message)s",
     "out_file": null

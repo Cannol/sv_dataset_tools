@@ -1,7 +1,7 @@
 import os
 import cv2
 import numpy as np
-from configs import VIDEO_TARGET_SELECTOR_CONFIG_FILE, VIDEO_TARGET_SELECTOR_FONT_FILE, ROOT
+from configs import VIDEO_TARGET_SELECTOR_CONFIG_FILE, VIDEO_TARGET_SELECTOR_FONT_FILE, ROOT, TRACKER_CONFIG_FILE
 from common.yaml_helper import YamlConfigClassBase
 from common.json_helper import SaveToFile, ReadFromFile
 from common.logger import LoggerMeta
@@ -16,6 +16,8 @@ import platform
 from bases.targets import Target
 from bases.key_mapper import start_key_test
 
+from bases.trackers import TrackerRunner
+
 try:
     import tkinter as tk
 
@@ -28,7 +30,7 @@ except ImportError:
     DisplayHeight = -1
     DisplayWidth = -1
 
-VERSION = '1.2.2 r'
+VERSION = '2.0.0 beta (AI辅助版)'
 
 
 class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
@@ -77,7 +79,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
 
         self._selections = [ord('1'), ord('2'), ord('3'), ord('b'), ord('q')]
         self._select_actions = [self._multi_targets_annotations, self._reload_targets,
-                                self._make_video, self._judge_keys, self._quit]
+                                self._format_target, self._judge_keys, self._quit]
 
         self.font1 = ImageFont.truetype(VIDEO_TARGET_SELECTOR_FONT_FILE, 15)
         _, self.font1_height = self.font1.getsize('测试高度')
@@ -88,6 +90,33 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         self._L.info('Start key test...')
         start_key_test()
         self._L.info('End key test.')
+        return 1
+
+    def _format_target(self):
+        from bases.targets import normalizing_targets
+        import datetime
+        import shutil
+        self._L.info('开始校验并转换目标格式...')
+        errors = normalizing_targets(self._target_dir)
+        if len(errors) == 0:
+            self._L.info('无错误完成转换! Good Luck!')
+        else:
+            self._L.info('打开%d个目标文件出现了问题，是否将其移出文件夹？' % len(errors))
+            while True:
+                ans = input('Y/N？（回车默认为Y）')
+                if ans == '' or ans == 'Y':
+                    save_dir = os.path.join(self.SaveToDirectory, '%s_bak_errors'
+                                            % datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f'))
+                    os.makedirs(save_dir, exist_ok=True)
+                    for file in errors:
+                        file_name = os.path.basename(file)
+                        shutil.move(file, os.path.join(save_dir, file_name))
+                    self._L.info('将%d个错误文件转移至: %s' % (len(errors), save_dir))
+                    self._reload_targets()
+                    break
+                elif ans == 'n':
+                    self._L.warning('您选择了忽略这些错误文件，但这些将文件无法被加载和标注。')
+                    break
         return 1
 
     def _make_video(self):
@@ -117,11 +146,17 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         # Target.Backup(self._backup_targets)
         if self.AutoSaving > 0:
             Target.start_auto(self.AutoSaving)
+        TrackerRunner.Load(TRACKER_CONFIG_FILE)
+        TrackerRunner.StartRunners(self.image_list)
+        TrackerRunner.BandReceiveHookAndStartThread(hook_func=annotator.receive_auto_results)
         annotator.run(window_location=win_loc)
         annotator.destroy()
+        TrackerRunner.StopAllRunners()
+        TrackerRunner.BandReceiveHookAndStartThread(None)
         Target.stop_auto()
         Target.SaveAllTargets()
         self._target_in_range, self._target_total = Target.GetAllTargets(self._target_dir)
+
         return 1
 
     def _center_text(self, text, font=None, h=None, w=None):
@@ -178,7 +213,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         image = Image.fromarray(tmp_image)
         draw = ImageDraw.Draw(image)  # 绘图句柄
         start_y = end_y + 20
-        text = u'按1进入多目标标注模式，按2重新加载目标，按3制作标注结果视频，按b进入按键调试模式，按q退出工具'
+        text = u'按1进入多目标标注模式，按2重新加载目标，按3转换目标为标准格式，按b进入按键调试模式，按q退出工具'
         start_x, start_y = self._center_text(text, self.font1, h=start_y)
         draw.text((start_x, start_y), text, font=self.font1, fill='yellow')
         image_np = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)

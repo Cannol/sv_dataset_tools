@@ -80,3 +80,4 @@ RESULTS_ANALYSIS_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'result_ana
 TMP_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'tmp_config.yaml'))
 
 VIDEO_IDS_TXT = file_exists(os.path.join(CONFIGS_DIR, 'video_ids.txt'))
+TRACKER_CONFIG_FILE = file_exists(os.path.join(CONFIGS_DIR, 'tracker.yaml'))

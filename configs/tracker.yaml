@@ -1,0 +1,5 @@
+MaxQueue: 100
+CacheSize: 1000   # MB
+NumTrackers: 1
+ShowTrackingSteps: false
+ShowWaitTime: 500  # 毫秒
