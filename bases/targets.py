@@ -18,6 +18,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     _L: Logger = None
 
     targets_dict = {}
+    total_num_add = 0
     _seed = ''
     _default_path = ''  # default_path
     _max_length = 0  # sequence length
@@ -125,6 +126,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
             else:
                 targets.write('[NO] %s' % file)
             targets.set_description('Searching...(%d | %d)' % (len(cls.targets_dict), n+1))
+        cls.total_num_add = len(target_files) - len(cls.targets_dict)
         return len(cls.targets_dict), len(target_files)
 
     @classmethod
