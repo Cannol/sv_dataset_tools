@@ -17,6 +17,7 @@ from bases.targets import Target
 from bases.key_mapper import start_key_test
 
 from bases.trackers import TrackerRunner
+from common.voc_helper import make_voc_dataset
 
 try:
     import tkinter as tk
@@ -30,7 +31,7 @@ except ImportError:
     DisplayHeight = -1
     DisplayWidth = -1
 
-VERSION = '2.0.0 beta (AI辅助版)'
+VERSION = '2.0.1 r (AI辅助版)'
 
 
 class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
@@ -78,9 +79,9 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         self.WinWidth = self.WindowSize[0]
         self.WinHeight = self.WindowSize[1]
 
-        self._selections = [ord('1'), ord('2'), ord('3'), ord('b'), ord('q')]
+        self._selections = [ord('1'), ord('2'), ord('3'), ord('b'), ord('q'), ord('p')]
         self._select_actions = [self._multi_targets_annotations, self._reload_targets,
-                                self._format_target, self._judge_keys, self._quit]
+                                self._format_target, self._judge_keys, self._quit, self._create_voc_dataset]
 
         self.font1 = ImageFont.truetype(VIDEO_TARGET_SELECTOR_FONT_FILE, 15)
         _, self.font1_height = self.font1.getsize('测试高度')
@@ -91,6 +92,24 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         self._L.info('Start key test...')
         start_key_test()
         self._L.info('End key test.')
+        return 1
+
+    def _create_voc_dataset(self):
+        import time
+        self._L.info('Start creating dataset in voc format...')
+        time.sleep(1)
+        root_dir = input('Please input a root directory:')
+        _,_,w,h = self._video_info['crop_area']
+        c = 3 if self._video_info['is_rgb'] else 1
+        out_path = make_voc_dataset(root_path=root_dir,
+                                    dataset_name='IPIUSVX for Detection',
+                                    video_name=os.path.basename(self._video_info['source_path'].split('.')[0]),
+                                    crop_range=self.SelectArea,
+                                    owner_name='IPIU Lab @ Xidian University',
+                                    image_shape=(w, h, c),
+                                    targets=Target.targets_dict,
+                                    frame_list=self.image_list)
+        self._L.info('The VOC dataset is saved in: %s' % out_path)
         return 1
 
     def _format_target(self):
@@ -115,7 +134,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
                     self._L.info('将%d个错误文件转移至: %s' % (len(errors), save_dir))
                     self._reload_targets()
                     break
-                elif ans == 'n':
+                elif ans == 'N':
                     self._L.warning('您选择了忽略这些错误文件，但这些将文件无法被加载和标注。')
                     break
         return 1
@@ -215,7 +234,7 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         image = Image.fromarray(tmp_image)
         draw = ImageDraw.Draw(image)  # 绘图句柄
         start_y = end_y + 20
-        text = u'按1进入多目标标注模式，按2重新加载目标，按3转换目标为标准格式，按b进入按键调试模式，按q退出工具'
+        text = u'按1进入多目标标注模式，按2重新加载目标，按3转换目标为标准格式，按b进入按键调试模式，按p生成voc数据集，按q退出工具'
         start_x, start_y = self._center_text(text, self.font1, h=start_y)
         draw.text((start_x, start_y), text, font=self.font1, fill='yellow')
         image_np = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)

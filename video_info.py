@@ -8,7 +8,7 @@ cap = cv2.VideoCapture(video)
 
 # Check if camera opened successfully
 if (cap.isOpened() == False):
-    print("Error opening video  file")
+    print("Error opening video file")
 
 num = 0
 w = 0

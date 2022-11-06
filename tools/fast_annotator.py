@@ -785,6 +785,10 @@ class Annotator(WorkCanvas, metaclass=LoggerMeta):
                     return
             else:
                 return
+        # elif key == ord('g'):
+        #     if self._selected_target:
+        #         if not self.send_auto_track_task(''):
+
         elif key == ord('k'):
             if self._selected_target:
                 if self._selected_target.freeze:

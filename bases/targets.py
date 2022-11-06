@@ -62,6 +62,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
             cls._pause = pause_value
 
     def from_dict(self, obj_dict):
+
         super(Target, self).from_dict(obj_dict)
         self.rect_poly_points[self.start_index:self.end_index+1] -= [self._global_off_x, self._global_off_y]
 
@@ -200,6 +201,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
         else:
             self._L.info('当前目标类别未修改')
 
+    # def add_all_size(self, x, y):
     def get_nearest_key_frame_rects(self, frame_index):
         if frame_index > self.end_index:
             return self.end_index, -1, self.rect_poly_points[self.end_index].copy(), None
@@ -336,9 +338,14 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
     def File(self):
         return os.path.join(self._default_path, '%s.meta' % self.name)
 
-    def save_file(self, path=None):
+    def save_file(self, path=None, base_path=False):
         # self.rect_poly_points += [self._global_off_x, self._global_off_y]
-        self.Json = path if path else self.File
+        if path is None:
+            self.Json = self.File
+        elif base_path is False:
+            self.Json = path
+        else:
+            self.Json = os.path.join(path, '%s.meta' % self.name)
 
     def set_key_point(self, frame_index, poly_points=None, refresh=True):
         key = self.key_frame_flags[frame_index, 2]
@@ -592,7 +599,7 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
 
         cls.RemoveTarget(target_a)
         cls.RemoveTarget(target_b)
-        obj.frseeze = ''
+        obj.freeze = ''
         return obj
 
     def get_center_point(self, index):
@@ -635,7 +642,12 @@ def normalizing_targets(path):
 
 def get_all_targets_max_range(path):
     import math
-    target_files = [os.path.join(path, i) for i in os.listdir(path) if i.endswith('.meta')]
+    if isinstance(path, str):
+        target_files = [os.path.join(path, i) for i in os.listdir(path) if i.endswith('.meta')]
+    elif isinstance(path, list):
+        target_files = path
+    else:
+        raise TypeError
     left = []
     right = []
     bottom = []
@@ -660,7 +672,7 @@ def get_all_targets_max_range(path):
         left.append(float(np.min(points[:, 0])))
         bottom.append(float(np.max(points[:, 1])))
         top.append(float(np.min(points[:, 1])))
-    print(path)
+    # print(path)
     print('--> cls: {}'.format(cls))
     print('--> Range: left {}, right {}, top {}, bottom {}'.format(math.floor(min(left)), math.ceil(max(right)),
                                                                    math.floor(min(top)), math.ceil(max(bottom))))
