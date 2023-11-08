@@ -1,166 +1,266 @@
 from typing import Dict
 import os
-import sys
 import shutil
-import xml.dom.minidom
 import numpy as np
 import tqdm
 import datetime
-import cv2
 from bases.targets import Target
+from common.json_helper import JsonTransBase
 
 
-def make_voc_dataset(root_path, dataset_name, video_name, crop_range, owner_name, image_shape, targets: Dict[str, Target], frame_list:list):
+class BaseInfo(JsonTransBase):
+    def __init__(self):
+        self.description = ''
+        self.url = None
+        self.version = 1.0
+        self.year = 2022
+        self.contributor = 'IPIU Lab @Xidian University'
+        self.date_created = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        self.video_length = 0
+        self.video_name = ""
+        self.crop_range = []
+        self.color_channels = 0
+
+
+class Licenses(JsonTransBase):
+    def __init__(self):
+        self.url = ""
+        self.id = 0
+        self.name = ""
+
+
+class Images(JsonTransBase):
+    def __init__(self):
+        self.license = 0
+        self.file_name = ""
+        self.height = 0
+        self.width = 0
+        self.date_captured = ""
+        self.id = 1
+
+
+class Annotations(JsonTransBase):
+    def __init__(self):
+        self.area = 1.0
+        self.iscrowd = 0
+        self.image_id = 0
+        self.bbox = []
+        self.category_id = 0
+        self.id = 0
+        self.keyframe = 0
+
+
+class Categories(JsonTransBase):
+    def __init__(self):
+        self.supercategory = ''
+        self.id = 0
+        self.name = ''
+
+    @classmethod
+    def MakeIPIUDefault(cls):
+        cls_super = ['vehicle', 'vehicle', 'ship', 'airplane', 'train']
+        cls_names = ['vehicle', 'large-vehicle', 'ship', 'airplane', 'train']
+
+        default_list = []
+        _id_dict = {}
+        for i, (cs, cn) in enumerate(zip(cls_super, cls_names)):
+            obj = cls()
+            obj.id = i + 1
+            obj.name = cn
+            obj.supercategory = cs
+            default_list.append(obj)
+            _id_dict[cn] = i + 1
+
+        return default_list, _id_dict
+
+
+class Targets(JsonTransBase):
+    def __init__(self):
+        self.id = 0
+        self.name = ''
+        self.category_id = 0
+
+class COCOJsonFile(JsonTransBase):
+    """
+    The format is designed for Satellite Video dataset with COCO format,
+    which is something different from the official COCO format.
+    """
+
+    def __init__(self):
+        self.info = {}
+        self.licenses = []
+        self.images = []
+        self.annotations = []
+        self.categories = []
+        self.type = ''
+
+class IPIUCOCOJsonFile(JsonTransBase):
+    """
+    The format is designed for Satellite Video dataset with COCO format,
+    which is something different from the official COCO format.
+    """
+
+    _dict = {
+        'licenses': Licenses,
+        "images": Images,
+        "annotations": Annotations,
+        "categories": Categories,
+        "targets": Targets
+    }
+
+    def __init__(self):
+        self.info = BaseInfo()
+        self.licenses = []
+        self.images = []
+        self.annotations = []
+        self.categories = []
+        self.targets = []
+
+    def from_dict(self, obj_dict: dict):
+        self.info = BaseInfo.FromJsonDict(obj_dict.pop('info'))
+
+        for key in obj_dict:
+            value = obj_dict[key]
+            assert isinstance(value, list), type(value)
+            assert key in self._dict.keys(), key
+            cls: JsonTransBase = self._dict[key]
+            lst: list = getattr(self, key)
+            for item in value:
+                lst.append(cls.FromJsonDict(item))
+
+
+def make_coco_dataset(root_path, dataset_name, video_name: str, crop_range, owner_name, image_shape,
+                      targets: Dict[str, Target], frame_list: list, version=1.0):
     length = len(frame_list)
     crop_range_text = '_'.join(list(map(str, crop_range)))
     date = datetime.date.today()
     save_date = '%04d%02d%02d' % (date.year, date.month, date.day)
     out_path = os.path.join(root_path, '%s_%s_%s' % (video_name, crop_range_text, save_date))
-    folder = os.path.basename(out_path)
+
+    date_captured = video_name.split('_')[2]
+    date_captured = '%s-%s-%s %s:%s:%s' % (date_captured[:4], date_captured[4:6], date_captured[6:8],
+                                           date_captured[8:10], date_captured[10:12], date_captured[12:14])
 
     os.makedirs(out_path, exist_ok=True)
 
-    anno_path = os.path.join(out_path, 'Annotations')
     tiff_path = os.path.join(out_path, 'TIFFImages')
-    demo_path = os.path.join(out_path, 'DemoImages')
-    os.makedirs(anno_path, exist_ok=True)
+    # demo_path = os.path.join(out_path, 'DemoImages')
     os.makedirs(tiff_path, exist_ok=True)
-    os.makedirs(demo_path, exist_ok=True)
+    # os.makedirs(demo_path, exist_ok=True)
+
+    file = IPIUCOCOJsonFile()
+    file.info.description = dataset_name
+    file.info.url = None
+    file.info.version = version
+    file.info.year = date.year
+    file.info.contributor = owner_name
+    file.info.video_length = length
+    file.info.video_name = video_name
+    file.info.crop_range = crop_range
+    file.info.color_channels = image_shape[2]
+
+    lic = Licenses()
+    lic.id = 1
+    lic.url = ""
+    lic.name = "Experimental Dataset, No Public, No Commercial Use"
+    file.licenses.append(lic)
+
+    # make default categories
+    file.categories, cls_id_dict = Categories.MakeIPIUDefault()
+
+    target_list = list(targets)
+
+    target_id_dict = {}
+    for i, target_name in enumerate(target_list):
+        t = Targets()
+        t.id = i + 1
+        t.name = targets[target_name].name
+        t.category_id = cls_id_dict[targets[target_name].class_name]
+        file.targets.append(t)
+        target_id_dict[target_name] = i + 1
 
     for i, frame_file in tqdm.tqdm(enumerate(frame_list)):
 
         img_name = '%06d.tiff' % (i+1)
-        xml_name = '%06d.xml' % (i+1)
+
+        img = Images()
+        img.license = lic.id
+        img.file_name = img_name
+        img.width, img.height, _ = image_shape
+        img.date_captured = date_captured
+        img.id = i + 1
+        file.images.append(img)
 
         # copying image files
         out_tiff_file = os.path.join(tiff_path, img_name)
         shutil.copy(frame_file, out_tiff_file)
 
-        # making xml files
-        objects_for_each_frame = []
-        cls_all = set()
-
         # get all visible targets
-        for target_name in targets:
+        for target_name in target_list:
             target = targets[target_name]
             flag, poly = target.get_rect_poly(i)
             if flag and target.state_flags[i] == 0:
-                obj_dict = {}
+                anno = Annotations()
+                anno.id = target_id_dict[target_name] * 1000 + img.id
+                anno.image_id = img.id
+                anno.category_id = cls_id_dict[target.class_name]
+                anno.iscrowd = 0
+
                 x, y = poly[:, 0], poly[:, 1]
-                obj_dict['cls_name'] = target.class_name
-                obj_dict['bndbox'] = [np.min(x), np.min(y), np.max(x), np.max(y)]
-                obj_dict['id'] = target.name
-                obj_dict['keyframe'] = target.key_frame_flags[i, 2]
-                objects_for_each_frame.append(obj_dict)
-                cls_all.add(target.class_name)
+                x1, y1, x2, y2 = np.min(x), np.min(y), np.max(x), np.max(y)
+                anno.bbox = [x1, y1, x2-x1, y2-y1]
+                anno.keyframe = int(target.key_frame_flags[i, 2])
+                anno.area = anno.bbox[2] * anno.bbox[3]
+                file.annotations.append(anno)
 
-        if len(objects_for_each_frame) == 0:
-            continue
 
-        # create demo image
-        img = cv2.imread(frame_file)
-        for obj in objects_for_each_frame:
-            x, y, xx, yy = obj['bndbox']
+        # # create demo image
+        # img = cv2.imread(frame_file)
+        # for obj in objects_for_each_frame:
+        #     x, y, xx, yy = obj['bndbox']
+        #
+        #     cv2.rectangle(img, (int(round(x)), int(round(y))), (int(round(xx)), int(round(yy))), [0, 0, 255], 1, cv2.LINE_AA)
+        # cv2.imwrite(os.path.join(demo_path, img_name), img)
 
-            cv2.rectangle(img, (int(round(x)), int(round(y))), (int(round(xx)), int(round(yy))), [0, 0, 255], 1, cv2.LINE_AA)
-        cv2.imwrite(os.path.join(demo_path, img_name), img)
+    save_json = os.path.join(out_path, 'detection_all.json')
+    file.Json = os.path.join(save_json)
 
-        # create xml file object and root node
-        doc = xml.dom.minidom.Document()
-        root_node = doc.createElement("annotation")
-        doc.appendChild(root_node)
+    print('>> Annotation file saved: %s' % save_json)
 
-        # create folder node
-        folder_node = doc.createElement("folder")
-        folder_value = doc.createTextNode(folder)
-        folder_node.appendChild(folder_value)
-        root_node.appendChild(folder_node)
+    cls_names = {'vehicle': 0, 'large-vehicle': 0, 'ship': 0, 'airplane': 0, 'train': 0}
+    for t in targets:
+        target = targets[t]
+        cls_names[target.class_name] += 1
 
-        # create filename node
-        filename_node = doc.createElement("filename")
-        filename_value = doc.createTextNode(img_name)
-        filename_node.appendChild(filename_value)
-        root_node.appendChild(filename_node)
+    with open(os.path.join(root_path, 'count.txt'), 'a+') as f:
+        f.write('%s,%d,%d,%d,%d,%d,%d\n' % (video_name, len(file.annotations),
+                                            cls_names['vehicle'],
+                                            cls_names['large-vehicle'],
+                                            cls_names['ship'],
+                                            cls_names['airplane'],
+                                            cls_names['train']))
 
-        # create owner node
-        owner_node = doc.createElement("owner")
-        owner_node.appendChild(doc.createTextNode(owner_name))
-        root_node.appendChild(owner_node)
-
-        # create source node
-        source_node = doc.createElement("source")
-        dataset_node = doc.createElement("dataset_name")
-        dataset_node.appendChild(doc.createTextNode(dataset_name))
-        source_node.appendChild(dataset_node)
-        video_frame_node = doc.createElement("frame_now")
-        video_frame_node.appendChild(doc.createTextNode(str(i+1)))
-        source_node.appendChild(video_frame_node)
-        video_frame_total_node = doc.createElement("frame_total")
-        video_frame_total_node.appendChild(doc.createTextNode(str(length)))
-        root_node.appendChild(source_node)
-
-        # create classes node
-        classes_node = doc.createElement("categories")
-        cls_all_list = list(cls_all)
-        cls_all_list.sort()
-        class_count_node = doc.createElement("count")
-        class_count_node.appendChild(doc.createTextNode(str(len(cls_all_list))))
-        class_names_node = doc.createElement("name_list")
-        class_names_node.appendChild(doc.createTextNode(','.join(cls_all_list)))
-        classes_node.appendChild(class_count_node)
-        classes_node.appendChild(class_names_node)
-        root_node.appendChild(classes_node)
-
-        # create size node
-        size_node = doc.createElement("size")
-        image_width, image_height, depth = image_shape
-        for item, value in zip(["width", "height", "depth"], [image_width, image_height, depth]):
-            elem = doc.createElement(item)
-            elem.appendChild(doc.createTextNode(str(value)))
-            size_node.appendChild(elem)
-        root_node.appendChild(size_node)
-
-        # create segmented node
-        seg_node = doc.createElement("segmented")
-        seg_node.appendChild(doc.createTextNode(str(0)))
-        root_node.appendChild(seg_node)
-
-        # create object node
-        for _object in objects_for_each_frame:
-            obj_node = doc.createElement("object")
-            name_node = doc.createElement("name")
-            name_node.appendChild(doc.createTextNode(_object['cls_name']))
-            obj_node.appendChild(name_node)
-
-            id_node = doc.createElement("id")
-            id_node.appendChild(doc.createTextNode(_object['id']))
-            obj_node.appendChild(id_node)
-
-            keyframe_node = doc.createElement("keyframe")
-            keyframe_node.appendChild(doc.createTextNode(str(_object['keyframe'])))
-            obj_node.appendChild(keyframe_node)
-
-            diff_node = doc.createElement("difficult")
-            diff_node.appendChild(doc.createTextNode(str(0)))
-            obj_node.appendChild(diff_node)
-
-            bndbox_node = doc.createElement("bndbox")
-            for item, value in zip(["xmin", "ymin", "xmax", "ymax"], _object['bndbox']):
-                elem = doc.createElement(item)
-                elem.appendChild(doc.createTextNode(str(value)))
-                bndbox_node.appendChild(elem)
-            obj_node.appendChild(bndbox_node)
-            root_node.appendChild(obj_node)
-
-        with open(os.path.join(anno_path, xml_name), "w", encoding="utf-8") as f:
-            # writexml()第一个参数是目标文件对象，第二个参数是根节点的缩进格式，第三个参数是其他子节点的缩进格式，
-            # 第四个参数制定了换行格式，第五个参数制定了xml内容的编码。
-            doc.writexml(f, indent='', addindent='\t', newl='\n', encoding="utf-8")
     return out_path
 
 
 
-
+if __name__ == '__main__':
+    # ipiu = IPIUCOCOJsonFile.MakeNewFromJsonFile('/data1/VISO_dataset/coco/car/annotations/instances_val2017.json')
+    ipiu = COCOJsonFile.MakeNewFromJsonFile('/data1/VISO_dataset/coco/car/annotations/instances_test2017.json')
+    print()
+    ipiu.categories = [
+        {"supercategory": '',
+        "id": 1,
+        "name": 'car'}
+    ]
+    ipiu.Json = '/data1/VISO_dataset/coco/car/annotations/instances_test2017_.json'
+#     file = IPIUCOCOJsonFile()
+#     for i in range(10):
+#         file.images.append(Images())
+#     d = file.Json
+#     xx = IPIUCOCOJsonFile.MakeNewFromJson(d)
+#     print()
 
 
 

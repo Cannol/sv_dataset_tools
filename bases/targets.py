@@ -123,9 +123,10 @@ class Target(JsonTransBase, metaclass=LoggerMeta):
             if yes:
                 cls.targets_dict[name] = t
                 t.__changed_flag = False
-                targets.write('[OK] %s' % file)
+                # targets.write('[OK] %s' % file)
             else:
-                targets.write('[NO] %s' % file)
+                pass
+                # targets.write('[NO] %s' % file)
             targets.set_description('Searching...(%d | %d)' % (len(cls.targets_dict), n+1))
         cls.total_num_add = len(target_files) - len(cls.targets_dict)
         return len(cls.targets_dict), len(target_files)

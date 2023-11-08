@@ -101,6 +101,12 @@ class JsonTransBase(object):
         with open(json_save_path, 'w') as f:
             json.dump(d_out, f, cls=JsonEncoderCls, indent=self.Indent, ensure_ascii=self.Ascii)
 
+    @classmethod
+    def FromJsonDict(cls, obj_dict: dict):
+        obj = cls()
+        obj.from_dict(obj_dict)
+        return obj
+
     def from_dict(self, obj_dict):
         """
         This function initialize the object by dict
@@ -141,6 +147,7 @@ class JsonTransBase(object):
                 elif type(v_) == type(value):
                     setattr(self, key, value)
                 else:
+                    print(v_, value)
                     raise TypeError('Type does not match! {} vs. {}, please check your class {} or json file'.format(type(v_), type(value), type(self)))
             elif hasattr(self, key):
                 _L.debug("Detecting <None Type> in this class <{}> for key <{}>, the value is given by json file.".format(type(self), key))

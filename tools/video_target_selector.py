@@ -18,6 +18,7 @@ from bases.key_mapper import start_key_test
 
 from bases.trackers import TrackerRunner
 from common.voc_helper import make_voc_dataset
+from common.coco_helper import make_coco_dataset
 
 try:
     import tkinter as tk
@@ -94,12 +95,14 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
         self._L.info('End key test.')
         return 1
 
-    def _create_voc_dataset(self):
+    def _create_voc_dataset(self, root_dir=None):
         import time
         self._L.info('Start creating dataset in voc format...')
         time.sleep(1)
-        root_dir = input('Please input a root directory:')
-        _,_,w,h = self._video_info['crop_area']
+        while root_dir is None or root_dir == '':
+            root_dir = input('Please input a root directory:')
+            root_dir = root_dir.strip()
+        _, _, w, h = self._video_info['crop_area']
         c = 3 if self._video_info['is_rgb'] else 1
         out_path = make_voc_dataset(root_path=root_dir,
                                     dataset_name='IPIUSVX for Detection',
@@ -110,6 +113,27 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
                                     targets=Target.targets_dict,
                                     frame_list=self.image_list)
         self._L.info('The VOC dataset is saved in: %s' % out_path)
+        return 1
+
+    def _create_coco_dataset(self, root_dir=None):
+        import time
+        self._L.info('Start creating dataset in coco format...')
+        time.sleep(1)
+        while root_dir is None or root_dir == '':
+            root_dir = input('Please input a root directory:')
+            root_dir = root_dir.strip()
+        _, _, w, h = self._video_info['crop_area']
+        c = 3 if self._video_info['is_rgb'] else 1
+        out_path = make_coco_dataset(root_path=root_dir,
+                                     dataset_name='IPIUSVX for Detection',
+                                     video_name=os.path.basename(self._video_info['source_path'].split('.')[0]),
+                                     crop_range=self.SelectArea,
+                                     owner_name='IPIU Lab @ Xidian University',
+                                     image_shape=(w, h, c),
+                                     targets=Target.targets_dict,
+                                     frame_list=self.image_list,
+                                     version=1.0)
+        self._L.info('The COCO dataset is saved in: %s' % out_path)
         return 1
 
     def _format_target(self):
@@ -445,10 +469,14 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
             raise FileExistsError(cls.VideoFilePath)
 
     @classmethod
-    def StartVideo(cls, var_config=None):
+    def StartVideo(cls, var_config=None, opt_config_file=None, exec_func_name=None, *args, **kwargs):
         cls._L.info('Running Target Selector Version %s, Welcome!' % VERSION)
-        cls.Load(VIDEO_TARGET_SELECTOR_CONFIG_FILE)
-        cls._L.info('Loaded configuration file from: %s' % VIDEO_TARGET_SELECTOR_CONFIG_FILE)
+        if opt_config_file is None:
+            cls.Load(VIDEO_TARGET_SELECTOR_CONFIG_FILE)
+            cls._L.info('Loaded configuration file from: %s' % VIDEO_TARGET_SELECTOR_CONFIG_FILE)
+        else:
+            cls.Load(opt_config_file)
+            cls._L.info('Loaded configuration file from: %s' % opt_config_file)
 
         if var_config is not None:
             var_config()
@@ -477,7 +505,12 @@ class TargetSelector(YamlConfigClassBase, metaclass=LoggerMeta):
                                                                                         cls._target_in_range,
                                                                                         cls._target_total))
 
-            player.run()
+            if exec_func_name is None:
+                player.run()
+            else:
+                func = getattr(player, exec_func_name)
+                func(*args, **kwargs)
+
         except KeyError as e:
             cls._L.error('Error Occurred in program! (%s)' % e.args)
             Target.SaveAllTargets()
