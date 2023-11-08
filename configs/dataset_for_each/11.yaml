@@ -1,6 +1,6 @@
-VideoFilePath: 'E:\ORSV_coll\total\JL103B_MSS_20180110095638_100003233_101_001_L1B_MSS.avi'
+VideoFilePath: '/data1/ORSV_coll/total/JL103B_MSS_20180110095638_100003233_101_001_L1B_MSS.avi'
 ImageSequence: '.tiff'  # 如果上面的路径是视频文件，则该项无效
-SaveToDirectory: 'D:\Sanatar\Desktop\新标注\011_皮兆亮'    # 标注数据将保存在该文件夹中annotations文件夹内，其他辅助数据将存放在此路径
+SaveToDirectory: '/data1/full_annotation/011_皮兆亮'    # 标注数据将保存在该文件夹中annotations文件夹内，其他辅助数据将存放在此路径
 TargetFolderName: 'targets'   # 存放标注目标的文件夹
 
 SelectArea: [5047,1235,6385,2425]   # x,y, xx ,yy
@@ -14,7 +14,7 @@ TargetClasses:
   - ['train', [255, 0 ,255]]
   - ['weak', [0, 255, 255]]
 
-CacheDirectory: 'D:\tmps'
+CacheDirectory: '/data1/tmps'
 CacheImage: '.tiff'
 
 WindowSize: [1200, 600]  # 主界面的窗口尺寸，不要修改
